@@ -1,0 +1,167 @@
+<script>
+    let apiBaseUrl = 'https://46ziigjlif.execute-api.us-east-2.amazonaws.com/prod/';
+
+    function showMessage(message, type = 'error') {
+        const existing = document.querySelector('.error, .success');
+        if (existing) existing.remove();
+
+        const div = document.createElement('div');
+        div.className = type;
+        div.textContent = message;
+        document.querySelector('.container').insertBefore(div, document.querySelector('.spaces-container'));
+
+        setTimeout(() => div.remove(), 5000);
+    }
+
+    async function makeAPIRequest(endpoint) {
+        if (!apiBaseUrl) {
+            throw new Error('API URL not set');
+        }
+
+        const response = await fetch(apiBaseUrl + endpoint);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    }
+
+    async function loadStats() {
+        try {
+            const data = await makeAPIRequest('stats');
+            displayStats(data.data);
+            document.getElementById('stats-section').style.display = 'block';
+        } catch (error) {
+            showMessage(`Failed to load stats: ${error.message}`);
+            console.error('Stats error:', error);
+        }
+    }
+
+    function displayStats(stats) {
+        const statsGrid = document.getElementById('statsGrid');
+        statsGrid.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-number">${stats.overview.totalSpaces}</div>
+                <div class="stat-label">Total Spaces</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.overview.liveSpaces}</div>
+                <div class="stat-label">Live Spaces</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.overview.totalParticipants}</div>
+                <div class="stat-label">Total Participants</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.activity.recentSpaces}</div>
+                <div class="stat-label">Recent (24h)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.overview.recordingCapable}</div>
+                <div class="stat-label">Recording Capable</div>
+            </div>
+        `;
+    }
+
+    async function loadSpaces() {
+        const spacesContent = document.getElementById('spacesContent');
+        spacesContent.innerHTML = '<div class="loading">Loading spaces...</div>';
+
+        try {
+            const status = document.getElementById('statusFilter').value;
+            const limit = document.getElementById('limitFilter').value;
+
+            let endpoint = 'spaces?';
+            const params = [];
+            if (limit) params.push(`limit=${limit}`);
+            if (status) params.push(`status=${status}`);
+            endpoint += params.join('&');
+
+            const data = await makeAPIRequest(endpoint);
+            displaySpaces(data.data);
+        } catch (error) {
+            spacesContent.innerHTML = `<div class="error">Failed to load spaces: ${error.message}</div>`;
+            console.error('Spaces error:', error);
+        }
+    }
+
+    function displaySpaces(spaces) {
+        const spacesContent = document.getElementById('spacesContent');
+
+        if (!spaces || spaces.length === 0) {
+            spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+            return;
+        }
+
+        spacesContent.innerHTML = spaces.map(space => `
+            <div class="space-item">
+                <div class="space-title">${space.title || 'Untitled Space'}</div>
+                <div class="space-host">
+                    🎙️ ${space.host?.displayName || space.host?.username || 'Unknown Host'}
+                    ${space.host?.username ? `(@${space.host.username})` : ''}
+                </div>
+                <div class="space-meta">
+                    <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
+                        ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
+                    </span>
+                    <span class="space-badge badge-participants">
+                        👥 ${space.participantCount || 0} participants
+                    </span>
+                    ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
+                </div>
+                <div class="space-actions">
+                    <button class="btn-small" onclick="viewSpaceDetails('${space._id}')">View Details</button>
+                    <button class="btn-small" onclick="viewParticipants('${space._id}')">View Participants</button>
+                    ${space.hlsUrl ? `<button class="btn-small" onclick="window.open('${space.hlsUrl}', '_blank')">🎥 Stream</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function viewSpaceDetails(spaceId) {
+        try {
+            const data = await makeAPIRequest(`spaces/${spaceId}`);
+            const space = data.data;
+
+            const details = `
+Space: ${space.title || 'Untitled'}
+Host: ${space.host?.displayName || space.host?.username || 'Unknown'}
+Status: ${space.isLive ? 'LIVE' : 'ENDED'}
+Participants: ${space.participantCount || 0}
+Created: ${space.createdAt ? new Date(space.createdAt).toLocaleString() : 'Unknown'}
+Updated: ${space.lastUpdated ? new Date(space.lastUpdated).toLocaleString() : 'Unknown'}
+${space.hlsUrl ? `\nStream URL: ${space.hlsUrl}` : ''}
+${space.description ? `\nDescription: ${space.description}` : ''}
+            `.trim();
+
+            alert(details);
+        } catch (error) {
+            showMessage(`Failed to load space details: ${error.message}`);
+        }
+    }
+
+    async function viewParticipants(spaceId) {
+        try {
+            const data = await makeAPIRequest(`spaces/${spaceId}/participants`);
+            const participants = data.participants || [];
+
+            if (participants.length === 0) {
+                alert('No participants found for this space');
+                return;
+            }
+
+            const participantsList = participants
+                .map(p => `${p.name || p.username || 'Unknown'} (${p.role || 'listener'})`)
+                .join('\n');
+
+            alert(`Participants in "${data.spaceTitle || 'Space'}":\n\n${participantsList}`);
+        } catch (error) {
+            showMessage(`Failed to load participants: ${error.message}`);
+        }
+    }
+
+    window.addEventListener('load', () => {
+        loadStats();
+        loadSpaces();
+    });
+</script>
