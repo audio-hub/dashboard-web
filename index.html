@@ -1,129 +1,451 @@
-<script>
-    let apiBaseUrl = 'https://46ziigjlif.execute-api.us-east-2.amazonaws.com/prod/';
-
-    function showMessage(message, type = 'error') {
-        const existing = document.querySelector('.error, .success');
-        if (existing) existing.remove();
-
-        const div = document.createElement('div');
-        div.className = type;
-        div.textContent = message;
-        document.querySelector('.container').insertBefore(div, document.querySelector('.spaces-container'));
-
-        setTimeout(() => div.remove(), 5000);
-    }
-
-    async function makeAPIRequest(endpoint) {
-        if (!apiBaseUrl) {
-            throw new Error('API URL not set');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitter Spaces Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        const response = await fetch(apiBaseUrl + endpoint);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
         }
 
-        return await response.json();
-    }
-
-    async function loadStats() {
-        try {
-            const data = await makeAPIRequest('stats');
-            displayStats(data.data);
-            document.getElementById('stats-section').style.display = 'block';
-        } catch (error) {
-            showMessage(`Failed to load stats: ${error.message}`);
-            console.error('Stats error:', error);
-        }
-    }
-
-    function displayStats(stats) {
-        const statsGrid = document.getElementById('statsGrid');
-        statsGrid.innerHTML = `
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.totalSpaces}</div>
-                <div class="stat-label">Total Spaces</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.liveSpaces}</div>
-                <div class="stat-label">Live Spaces</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.totalParticipants}</div>
-                <div class="stat-label">Total Participants</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.activity.recentSpaces}</div>
-                <div class="stat-label">Recent (24h)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.recordingCapable}</div>
-                <div class="stat-label">Recording Capable</div>
-            </div>
-        `;
-    }
-
-    async function loadSpaces() {
-        const spacesContent = document.getElementById('spacesContent');
-        spacesContent.innerHTML = '<div class="loading">Loading spaces...</div>';
-
-        try {
-            const status = document.getElementById('statusFilter').value;
-            const limit = document.getElementById('limitFilter').value;
-
-            let endpoint = 'spaces?';
-            const params = [];
-            if (limit) params.push(`limit=${limit}`);
-            if (status) params.push(`status=${status}`);
-            endpoint += params.join('&');
-
-            const data = await makeAPIRequest(endpoint);
-            displaySpaces(data.data);
-        } catch (error) {
-            spacesContent.innerHTML = `<div class="error">Failed to load spaces: ${error.message}</div>`;
-            console.error('Spaces error:', error);
-        }
-    }
-
-    function displaySpaces(spaces) {
-        const spacesContent = document.getElementById('spacesContent');
-
-        if (!spaces || spaces.length === 0) {
-            spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
-            return;
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
 
-        spacesContent.innerHTML = spaces.map(space => `
-            <div class="space-item">
-                <div class="space-title">${space.title || 'Untitled Space'}</div>
-                <div class="space-host">
-                    🎙️ ${space.host?.displayName || space.host?.username || 'Unknown Host'}
-                    ${space.host?.username ? `(@${space.host.username})` : ''}
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .controls input, .controls select, .controls button {
+            padding: 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .controls input {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .controls button {
+            background: #1da1f2;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .controls button:hover {
+            background: #1a91da;
+        }
+
+        .controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1da1f2;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .spaces-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .spaces-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .spaces-header h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .space-item {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+        }
+
+        .space-item:hover {
+            background: #f8f9fa;
+        }
+
+        .space-item:last-child {
+            border-bottom: none;
+        }
+
+        .space-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .space-host {
+            color: #1da1f2;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .space-meta {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .space-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .badge-live {
+            background: #ff4444;
+            color: white;
+        }
+
+        .badge-ended {
+            background: #666;
+            color: white;
+        }
+
+        .badge-participants {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .space-actions {
+            margin-top: 12px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            border: 1px solid #1da1f2;
+            background: white;
+            color: #1da1f2;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-small:hover {
+            background: #1da1f2;
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #fcc;
+        }
+
+        .success {
+            background: #efe;
+            color: #060;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #cfc;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .controls input {
+                min-width: 100%;
+                margin-bottom: 10px;
+            }
+            
+            .filter-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎙️ Twitter Spaces Dashboard</h1>
+            <p>Monitor and explore Twitter Spaces activity</p>
+        </div>
+
+        <div class="controls">
+            <input type="url" id="apiUrl" placeholder="Enter your API Gateway URL (e.g., https://xxx.execute-api.us-east-2.amazonaws.com/prod/)" value="">
+            <button onclick="connectToAPI()">Connect to API</button>
+            <button onclick="loadStats()">Refresh Stats</button>
+        </div>
+
+        <div id="stats-section" style="display: none;">
+            <div class="stats-grid" id="statsGrid">
+                <!-- Stats will be loaded here -->
+            </div>
+        </div>
+
+        <div class="spaces-container">
+            <div class="spaces-header">
+                <h2>📻 Spaces</h2>
+                <div class="filter-controls">
+                    <select id="statusFilter">
+                        <option value="">All Spaces</option>
+                        <option value="live">Live Only</option>
+                        <option value="ended">Ended Only</option>
+                    </select>
+                    <select id="limitFilter">
+                        <option value="10">Show 10</option>
+                        <option value="25">Show 25</option>
+                        <option value="50">Show 50</option>
+                    </select>
+                    <button onclick="loadSpaces()">Load Spaces</button>
                 </div>
-                <div class="space-meta">
-                    <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
-                        ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
-                    </span>
-                    <span class="space-badge badge-participants">
-                        👥 ${space.participantCount || 0} participants
-                    </span>
-                    ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
-                </div>
-                <div class="space-actions">
-                    <button class="btn-small" onclick="viewSpaceDetails('${space._id}')">View Details</button>
-                    <button class="btn-small" onclick="viewParticipants('${space._id}')">View Participants</button>
-                    ${space.hlsUrl ? `<button class="btn-small" onclick="window.open('${space.hlsUrl}', '_blank')">🎥 Stream</button>` : ''}
+            </div>
+            <div id="spacesContent">
+                <div class="loading">
+                    Enter your API URL above and click "Connect to API" to get started
                 </div>
             </div>
-        `).join('');
-    }
+        </div>
+    </div>
 
-    async function viewSpaceDetails(spaceId) {
-        try {
-            const data = await makeAPIRequest(`spaces/${spaceId}`);
-            const space = data.data;
+    <script>
+        let apiBaseUrl = '';
 
-            const details = `
+        function showMessage(message, type = 'error') {
+            const existing = document.querySelector('.error, .success');
+            if (existing) existing.remove();
+
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = message;
+            document.querySelector('.container').insertBefore(div, document.querySelector('.spaces-container'));
+            
+            setTimeout(() => div.remove(), 5000);
+        }
+
+        function connectToAPI() {
+            const url = document.getElementById('apiUrl').value.trim();
+            if (!url) {
+                showMessage('Please enter your API Gateway URL');
+                return;
+            }
+
+            // Ensure URL ends with /
+            apiBaseUrl = url.endsWith('/') ? url : url + '/';
+            
+            showMessage('Connected! Loading stats and spaces...', 'success');
+            loadStats();
+            loadSpaces();
+        }
+
+        async function makeAPIRequest(endpoint) {
+            if (!apiBaseUrl) {
+                throw new Error('Please connect to API first');
+            }
+
+            const response = await fetch(apiBaseUrl + endpoint);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return await response.json();
+        }
+
+        async function loadStats() {
+            try {
+                const data = await makeAPIRequest('stats');
+                displayStats(data.data);
+                document.getElementById('stats-section').style.display = 'block';
+            } catch (error) {
+                showMessage(`Failed to load stats: ${error.message}`);
+                console.error('Stats error:', error);
+            }
+        }
+
+        function displayStats(stats) {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.overview.totalSpaces}</div>
+                    <div class="stat-label">Total Spaces</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.overview.liveSpaces}</div>
+                    <div class="stat-label">Live Spaces</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.overview.totalParticipants}</div>
+                    <div class="stat-label">Total Participants</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.activity.recentSpaces}</div>
+                    <div class="stat-label">Recent (24h)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.overview.recordingCapable}</div>
+                    <div class="stat-label">Recording Capable</div>
+                </div>
+            `;
+        }
+
+        async function loadSpaces() {
+            const spacesContent = document.getElementById('spacesContent');
+            spacesContent.innerHTML = '<div class="loading">Loading spaces...</div>';
+
+            try {
+                const status = document.getElementById('statusFilter').value;
+                const limit = document.getElementById('limitFilter').value;
+                
+                let endpoint = 'spaces?';
+                const params = [];
+                if (limit) params.push(`limit=${limit}`);
+                if (status) params.push(`status=${status}`);
+                endpoint += params.join('&');
+
+                const data = await makeAPIRequest(endpoint);
+                displaySpaces(data.data);
+            } catch (error) {
+                spacesContent.innerHTML = `<div class="error">Failed to load spaces: ${error.message}</div>`;
+                console.error('Spaces error:', error);
+            }
+        }
+
+        function displaySpaces(spaces) {
+            const spacesContent = document.getElementById('spacesContent');
+            
+            if (!spaces || spaces.length === 0) {
+                spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+                return;
+            }
+
+            spacesContent.innerHTML = spaces.map(space => `
+                <div class="space-item">
+                    <div class="space-title">${space.title || 'Untitled Space'}</div>
+                    <div class="space-host">
+                        🎙️ ${space.host?.displayName || space.host?.username || 'Unknown Host'}
+                        ${space.host?.username ? `(@${space.host.username})` : ''}
+                    </div>
+                    <div class="space-meta">
+                        <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
+                            ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
+                        </span>
+                        <span class="space-badge badge-participants">
+                            👥 ${space.participantCount || 0} participants
+                        </span>
+                        ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
+                    </div>
+                    <div class="space-actions">
+                        <button class="btn-small" onclick="viewSpaceDetails('${space._id}')">View Details</button>
+                        <button class="btn-small" onclick="viewParticipants('${space._id}')">View Participants</button>
+                        ${space.hlsUrl ? `<button class="btn-small" onclick="window.open('${space.hlsUrl}', '_blank')">🎥 Stream</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function viewSpaceDetails(spaceId) {
+            try {
+                const data = await makeAPIRequest(`spaces/${spaceId}`);
+                const space = data.data;
+                
+                const details = `
 Space: ${space.title || 'Untitled'}
 Host: ${space.host?.displayName || space.host?.username || 'Unknown'}
 Status: ${space.isLive ? 'LIVE' : 'ENDED'}
@@ -132,36 +454,46 @@ Created: ${space.createdAt ? new Date(space.createdAt).toLocaleString() : 'Unkno
 Updated: ${space.lastUpdated ? new Date(space.lastUpdated).toLocaleString() : 'Unknown'}
 ${space.hlsUrl ? `\nStream URL: ${space.hlsUrl}` : ''}
 ${space.description ? `\nDescription: ${space.description}` : ''}
-            `.trim();
-
-            alert(details);
-        } catch (error) {
-            showMessage(`Failed to load space details: ${error.message}`);
-        }
-    }
-
-    async function viewParticipants(spaceId) {
-        try {
-            const data = await makeAPIRequest(`spaces/${spaceId}/participants`);
-            const participants = data.participants || [];
-
-            if (participants.length === 0) {
-                alert('No participants found for this space');
-                return;
+                `.trim();
+                
+                alert(details);
+            } catch (error) {
+                showMessage(`Failed to load space details: ${error.message}`);
             }
-
-            const participantsList = participants
-                .map(p => `${p.name || p.username || 'Unknown'} (${p.role || 'listener'})`)
-                .join('\n');
-
-            alert(`Participants in "${data.spaceTitle || 'Space'}":\n\n${participantsList}`);
-        } catch (error) {
-            showMessage(`Failed to load participants: ${error.message}`);
         }
-    }
 
-    window.addEventListener('load', () => {
-        loadStats();
-        loadSpaces();
-    });
-</script>
+        async function viewParticipants(spaceId) {
+            try {
+                const data = await makeAPIRequest(`spaces/${spaceId}/participants`);
+                const participants = data.participants || [];
+                
+                if (participants.length === 0) {
+                    alert('No participants found for this space');
+                    return;
+                }
+                
+                const participantsList = participants
+                    .map(p => `${p.name || p.username || 'Unknown'} (${p.role || 'listener'})`)
+                    .join('\n');
+                
+                alert(`Participants in "${data.spaceTitle || 'Space'}":\n\n${participantsList}`);
+            } catch (error) {
+                showMessage(`Failed to load participants: ${error.message}`);
+            }
+        }
+
+        // Auto-connect if URL is in localStorage
+        window.addEventListener('load', () => {
+            const savedUrl = localStorage.getItem('spacesApiUrl');
+            if (savedUrl) {
+                document.getElementById('apiUrl').value = savedUrl;
+            }
+        });
+
+        // Save URL to localStorage when connecting
+        document.getElementById('apiUrl').addEventListener('change', (e) => {
+            localStorage.setItem('spacesApiUrl', e.target.value);
+        });
+    </script>
+</body>
+</html>
