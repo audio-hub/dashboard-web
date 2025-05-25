@@ -1,0 +1,4 @@
+.gdrive-tmp
+gdrive-sync.json
+.env
+node_modules

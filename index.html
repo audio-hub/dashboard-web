@@ -47,15 +47,14 @@
             padding: 20px;
             margin-bottom: 30px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            display: flex; /* Added for better layout */
-            flex-wrap: wrap; /* Added for better layout */
-            gap: 10px; /* Added for spacing */
-            align-items: center; /* Added for alignment */
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
         }
 
         .controls input, .controls select, .controls button {
             padding: 12px;
-            /* margin: 5px; Removed margin, using gap */
             border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 16px;
@@ -246,15 +245,15 @@
 
         /* Modal styles */
         .modal {
-            display: none; /* Hidden by default */
-            position: fixed; /* Stay in place */
-            z-index: 1; /* Sit on top */
+            display: none;
+            position: fixed;
+            z-index: 1;
             left: 0;
             top: 0;
-            width: 100%; /* Full width */
-            height: 100%; /* Full height */
-            overflow: auto; /* Enable scroll if needed */
-            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
             justify-content: center;
             align-items: center;
         }
@@ -289,13 +288,23 @@
         }
 
         .modal-body pre {
-            white-space: pre-wrap; /* Allows text to wrap */
-            word-wrap: break-word; /* Breaks long words */
+            white-space: pre-wrap;
+            word-wrap: break-word;
             background-color: #f0f0f0;
             padding: 10px;
             border-radius: 8px;
-            max-height: 300px; /* Limit height for scroll */
+            max-height: 300px;
             overflow-y: auto;
+        }
+
+        .debug-info {
+            background: #f0f8ff;
+            border: 1px solid #b0d4f1;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 0.85rem;
+            color: #333;
         }
 
         @media (max-width: 768px) {
@@ -327,9 +336,10 @@
         </div>
 
         <div class="controls">
-            <input type="url" id="apiUrl" placeholder="Enter your API Gateway URL (e.g., https://xxx.execute-api.us-east-2.amazonaws.com/prod/)" value="https://46ziigjlif.execute-api.us-east-2.amazonaws.com/prod/">
+            <input type="url" id="apiUrl" placeholder="Enter your API Gateway URL (e.g., https://xxx.execute-api.us-east-2.amazonaws.com/prod/)" value="https://w7aws2f0oi.execute-api.us-east-2.amazonaws.com/prod/">
             <button onclick="connectToAPI()">Connect to API</button>
             <button onclick="loadStats()">Refresh Stats</button>
+            <button onclick="debugMapping()">Debug MP3 Mapping</button>
         </div>
 
         <div id="stats-section" style="display: none;">
@@ -373,10 +383,11 @@
     </div>
 
     <script>
-        let apiBaseUrl = 'https://46ziigjlif.execute-api.us-east-2.amazonaws.com/prod/';
+        let apiBaseUrl = 'https://w7aws2f0oi.execute-api.us-east-2.amazonaws.com/prod/';
         // This is the base URL for your S3 bucket where MP3 files are stored
         const s3BaseUrl = 'https://twitter-spaces-audio-streams-865712988605.s3.us-east-2.amazonaws.com/';
         let mp3FilesMap = {}; // Stores a map of slugified space keys to S3 MP3 URLs
+        let allSpaces = []; // Store all spaces for debugging
 
         /**
          * Displays a temporary message (error or success) on the page.
@@ -403,7 +414,7 @@
         function openModal(title, content) {
             document.querySelector('#detailModal h2').textContent = title;
             document.getElementById('modalContent').textContent = content;
-            document.getElementById('detailModal').style.display = 'flex'; // Use flex to center
+            document.getElementById('detailModal').style.display = 'flex';
         }
 
         /**
@@ -414,21 +425,58 @@
         }
 
         /**
-         * Slugifies a given text string.
-         * Used to create consistent keys for matching spaces with MP3 files.
+         * Improved slugify function that handles edge cases better.
          * @param {string} text - The input text.
          * @returns {string} The slugified text.
          */
         function slugify(text) {
             if (!text) return '';
             return String(text)
-                .normalize('NFD') // Normalize diacritics
-                .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase()
                 .trim()
-                .replace(/\s+/g, '-')           // Replace spaces with -
-                .replace(/[^\w-]+/g, '')       // Remove all non-word chars
-                .replace(/--+/g, '-');         // Replace multiple - with single -
+                .replace(/[^\w\s-]/g, '')  // Remove punctuation but keep spaces and hyphens
+                .replace(/\s+/g, '-')      // Replace spaces with hyphens
+                .replace(/-+/g, '-')       // Replace multiple hyphens with single
+                .replace(/^-+|-+$/g, '');  // Remove leading/trailing hyphens
+        }
+
+        /**
+         * Enhanced function to create multiple mapping keys for better matching.
+         * @param {string} host - The host username.
+         * @param {string} title - The space title.
+         * @returns {Array<string>} Array of possible keys to try.
+         */
+        function createMappingKeys(host, title) {
+            if (!host || !title) return [];
+            
+            const hostSlug = slugify(host);
+            const titleSlug = slugify(title);
+            
+            const keys = [];
+            
+            // Original key format
+            keys.push(`${hostSlug}-${titleSlug}`);
+            
+            // Try with just the first few words of the title
+            const titleWords = titleSlug.split('-');
+            if (titleWords.length > 3) {
+                keys.push(`${hostSlug}-${titleWords.slice(0, 3).join('-')}`);
+                keys.push(`${hostSlug}-${titleWords.slice(0, 4).join('-')}`);
+                keys.push(`${hostSlug}-${titleWords.slice(0, 5).join('-')}`);
+            }
+            
+            // Try without common prefix/suffix words
+            const cleanTitle = titleSlug
+                .replace(/^(the-|a-|an-)/g, '')
+                .replace(/(-space|-listening|-live|-show|-podcast)$/g, '');
+            
+            if (cleanTitle !== titleSlug) {
+                keys.push(`${hostSlug}-${cleanTitle}`);
+            }
+            
+            return [...new Set(keys)]; // Remove duplicates
         }
 
         /**
@@ -445,7 +493,7 @@
             apiBaseUrl = url.endsWith('/') ? url : url + '/';
             
             showMessage('Connected! Loading data...', 'success');
-            await loadMp3Files(); // Load MP3 files first, as displaySpaces depends on them
+            await loadMp3Files();
             loadStats();
             loadSpaces();
         }
@@ -463,7 +511,6 @@
 
             const response = await fetch(apiBaseUrl + endpoint);
             if (!response.ok) {
-                // Try to read error message from response body if available
                 let errorDetails = response.statusText;
                 try {
                     const errorJson = await response.json();
@@ -524,37 +571,91 @@
         }
 
         /**
-         * Loads MP3 file information from the API and populates the mp3FilesMap.
+         * Enhanced MP3 file loading with better parsing logic.
          */
         async function loadMp3Files() {
             try {
                 const data = await makeAPIRequest('files');
-                mp3FilesMap = {}; // Clear previous map
+                mp3FilesMap = {};
 
                 if (data.files && Array.isArray(data.files)) {
+                    console.log('Processing MP3 files:', data.files);
+                    
                     data.files.forEach(file => {
-                        const parts = file.name.split('/');
+                        const filePath = file.name;
+                        const parts = filePath.split('/');
+                        
                         if (parts.length >= 3) {
-                            const hostUsername = parts[0]; // e.g., 'garycardone'
-                            const filename = parts[2]; // e.g., 'garycardone-Bitcoin-is-a-speculative-investment-w-GC-and-friends.mp3'
-
-                            // Remove host username and .mp3 extension from filename to get the title slug part
-                            let titleSlugPart = filename.replace(`${hostUsername}-`, '');
-                            if (titleSlugPart.endsWith('.mp3')) {
-                                titleSlugPart = titleSlugPart.slice(0, -4); // Remove .mp3
+                            const hostUsername = parts[0];
+                            const filename = parts[2];
+                            
+                            // Extract title from filename
+                            // Remove .mp3 extension first
+                            let titlePart = filename.replace(/\.mp3$/i, '');
+                            
+                            // Try to remove host prefix if it exists
+                            const hostPrefix = `${hostUsername}-`;
+                            if (titlePart.startsWith(hostPrefix)) {
+                                titlePart = titlePart.substring(hostPrefix.length);
                             }
                             
-                            // The key for mapping should be slugified host username + '-' + slugified title slug part
-                            const key = slugify(hostUsername) + '-' + slugify(titleSlugPart);
-                            mp3FilesMap[key] = s3BaseUrl + file.name;
+                            // Handle special cases where filename might not follow expected pattern
+                            if (!titlePart || titlePart === hostUsername) {
+                                // Fallback: use the filename without extension as title
+                                titlePart = filename.replace(/\.mp3$/i, '');
+                            }
+                            
+                            // Create multiple possible keys for mapping
+                            const possibleKeys = createMappingKeys(hostUsername, titlePart);
+                            
+                            // Store the file URL under all possible keys
+                            possibleKeys.forEach(key => {
+                                if (key) {
+                                    mp3FilesMap[key] = s3BaseUrl + filePath;
+                                }
+                            });
+                            
+                            console.log(`File: ${filename} -> Keys: ${possibleKeys.join(', ')}`);
                         }
                     });
-                    console.log('MP3 files loaded and mapped:', mp3FilesMap);
+                    
+                    console.log('Final MP3 mapping:', mp3FilesMap);
+                    showMessage(`Loaded ${Object.keys(mp3FilesMap).length} MP3 file mappings`, 'success');
                 }
             } catch (error) {
                 showMessage(`Failed to load MP3 file list: ${error.message}`);
                 console.error('MP3 files error:', error);
             }
+        }
+
+        /**
+         * Debug function to show mapping attempts.
+         */
+        function debugMapping() {
+            if (allSpaces.length === 0) {
+                showMessage('Load spaces first to debug mapping');
+                return;
+            }
+            
+            let debugInfo = 'MP3 MAPPING DEBUG:\n\n';
+            debugInfo += `Available MP3 files (${Object.keys(mp3FilesMap).length}):\n`;
+            Object.keys(mp3FilesMap).forEach(key => {
+                debugInfo += `  ${key}\n`;
+            });
+            
+            debugInfo += '\nSpaces and their mapping attempts:\n';
+            allSpaces.forEach(space => {
+                const host = space.host?.username || '';
+                const title = space.title || '';
+                const possibleKeys = createMappingKeys(host, title);
+                const foundKey = possibleKeys.find(key => mp3FilesMap[key]);
+                
+                debugInfo += `\nSpace: "${title}" by @${host}\n`;
+                debugInfo += `  Keys tried: ${possibleKeys.join(', ')}\n`;
+                debugInfo += `  Match found: ${foundKey ? 'YES (' + foundKey + ')' : 'NO'}\n`;
+            });
+            
+            openModal('MP3 Mapping Debug', debugInfo);
         }
 
         /**
@@ -575,6 +676,7 @@
                 endpoint += params.join('&');
 
                 const data = await makeAPIRequest(endpoint);
+                allSpaces = data.data; // Store for debugging
                 displaySpaces(data.data);
             } catch (error) {
                 spacesContent.innerHTML = `<div class="error">Failed to load spaces: ${error.message}</div>`;
@@ -583,7 +685,7 @@
         }
 
         /**
-         * Displays the fetched Twitter Spaces in the dashboard.
+         * Enhanced space display with better MP3 matching.
          * @param {Array<Object>} spaces - An array of Twitter Space objects.
          */
         function displaySpaces(spaces) {
@@ -595,10 +697,12 @@
             }
 
             spacesContent.innerHTML = spaces.map(space => {
-                // Generate a key for the space to look up in mp3FilesMap
-                // Use the host's username and the space's title, both slugified.
-                const spaceKey = slugify(space.host?.username || '') + '-' + slugify(space.title || '');
-                const mp3Url = mp3FilesMap[spaceKey];
+                // Try multiple keys to find MP3 file
+                const host = space.host?.username || '';
+                const title = space.title || '';
+                const possibleKeys = createMappingKeys(host, title);
+                const foundKey = possibleKeys.find(key => mp3FilesMap[key]);
+                const mp3Url = foundKey ? mp3FilesMap[foundKey] : null;
                 
                 return `
                     <div class="space-item">
@@ -615,7 +719,9 @@
                                 👥 ${space.participantCount || 0} participants
                             </span>
                             ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
+                            ${foundKey ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
                         </div>
+                        ${foundKey ? `<div class="debug-info">Matched: ${foundKey}</div>` : ''}
                         <div class="space-actions">
                             <button class="btn-small" onclick="viewSpaceDetails('${space._id}')">View Details</button>
                             <button class="btn-small" onclick="viewParticipants('${space._id}')">View Participants</button>
@@ -646,7 +752,7 @@ ${space.hlsUrl ? `\nStream URL: ${space.hlsUrl}` : ''}
 ${space.description ? `\nDescription: ${space.description}` : ''}
                 `.trim();
                 
-                openModal('Space Details', details); // Use modal instead of alert
+                openModal('Space Details', details);
             } catch (error) {
                 showMessage(`Failed to load space details: ${error.message}`);
             }
@@ -662,7 +768,7 @@ ${space.description ? `\nDescription: ${space.description}` : ''}
                 const participants = data.participants || [];
                 
                 if (participants.length === 0) {
-                    openModal('Participants', 'No participants found for this space'); // Use modal
+                    openModal('Participants', 'No participants found for this space');
                     return;
                 }
                 
@@ -670,18 +776,17 @@ ${space.description ? `\nDescription: ${space.description}` : ''}
                     .map(p => `${p.name || p.username || 'Unknown'} (${p.role || 'listener'})`)
                     .join('\n');
                 
-                openModal(`Participants in "${data.spaceTitle || 'Space'}"`, participantsList); // Use modal
+                openModal(`Participants in "${data.spaceTitle || 'Space'}"`, participantsList);
             } catch (error) {
                 showMessage(`Failed to load participants: ${error.message}`);
             }
         }
 
-        // Auto-connect if URL is in localStorage
+        // Auto-connect if URL is saved
         window.addEventListener('load', () => {
             const savedUrl = localStorage.getItem('spacesApiUrl');
             if (savedUrl) {
                 document.getElementById('apiUrl').value = savedUrl;
-                // Automatically connect on load if a URL is saved
                 connectToAPI();
             }
         });
