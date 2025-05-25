@@ -336,9 +336,8 @@
         </div>
 
         <div class="controls">
-            <input type="url" id="apiUrl" placeholder="Enter your API Gateway URL (e.g., https://xxx.execute-api.us-east-2.amazonaws.com/prod/)" value="https://w7aws2f0oi.execute-api.us-east-2.amazonaws.com/prod/">
-            <button onclick="connectToAPI()">Connect to API</button>
             <button onclick="loadStats()">Refresh Stats</button>
+            <button onclick="loadSpaces()">Refresh Spaces</button>
             <button onclick="debugMapping()">Debug MP3 Mapping</button>
         </div>
 
@@ -366,7 +365,7 @@
             </div>
             <div id="spacesContent">
                 <div class="loading">
-                    Enter your API URL above and click "Connect to API" to get started
+                    Loading spaces data...
                 </div>
             </div>
         </div>
@@ -388,6 +387,14 @@
         const s3BaseUrl = 'https://twitter-spaces-audio-streams-865712988605.s3.us-east-2.amazonaws.com/';
         let mp3FilesMap = {}; // Stores a map of slugified space keys to S3 MP3 URLs
         let allSpaces = []; // Store all spaces for debugging
+
+        // Auto-load data when page loads
+        window.addEventListener('load', async () => {
+            showMessage('Loading data...', 'success');
+            await loadMp3Files();
+            loadStats();
+            loadSpaces();
+        });
 
         /**
          * Displays a temporary message (error or success) on the page.
@@ -479,36 +486,15 @@
             return [...new Set(keys)]; // Remove duplicates
         }
 
-        /**
-         * Connects to the API, loads stats, spaces, and MP3 files.
-         */
-        async function connectToAPI() {
-            const url = document.getElementById('apiUrl').value.trim();
-            if (!url) {
-                showMessage('Please enter your API Gateway URL');
-                return;
-            }
-
-            // Ensure URL ends with /
-            apiBaseUrl = url.endsWith('/') ? url : url + '/';
-            
-            showMessage('Connected! Loading data...', 'success');
-            await loadMp3Files();
-            loadStats();
-            loadSpaces();
-        }
+        // Remove the connectToAPI function and localStorage handling since API URL is hardcoded
 
         /**
          * Makes an asynchronous request to the API endpoint.
          * @param {string} endpoint - The API endpoint to call.
          * @returns {Promise<Object>} The JSON response from the API.
-         * @throws {Error} If the API base URL is not set or the request fails.
+         * @throws {Error} If the request fails.
          */
         async function makeAPIRequest(endpoint) {
-            if (!apiBaseUrl) {
-                throw new Error('Please connect to API first');
-            }
-
             const response = await fetch(apiBaseUrl + endpoint);
             if (!response.ok) {
                 let errorDetails = response.statusText;
@@ -781,20 +767,6 @@ ${space.description ? `\nDescription: ${space.description}` : ''}
                 showMessage(`Failed to load participants: ${error.message}`);
             }
         }
-
-        // Auto-connect if URL is saved
-        window.addEventListener('load', () => {
-            const savedUrl = localStorage.getItem('spacesApiUrl');
-            if (savedUrl) {
-                document.getElementById('apiUrl').value = savedUrl;
-                connectToAPI();
-            }
-        });
-
-        // Save URL to localStorage when API URL input changes
-        document.getElementById('apiUrl').addEventListener('change', (e) => {
-            localStorage.setItem('spacesApiUrl', e.target.value);
-        });
 
         // Close modal when clicking outside of it
         window.onclick = function(event) {
