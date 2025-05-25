@@ -47,11 +47,15 @@
             padding: 20px;
             margin-bottom: 30px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            display: flex; /* Added for better layout */
+            flex-wrap: wrap; /* Added for better layout */
+            gap: 10px; /* Added for spacing */
+            align-items: center; /* Added for alignment */
         }
 
         .controls input, .controls select, .controls button {
             padding: 12px;
-            margin: 5px;
+            /* margin: 5px; Removed margin, using gap */
             border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 16px;
@@ -240,6 +244,60 @@
             border: 1px solid #cfc;
         }
 
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            width: 80%;
+            max-width: 500px;
+            position: relative;
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .modal-body pre {
+            white-space: pre-wrap; /* Allows text to wrap */
+            word-wrap: break-word; /* Breaks long words */
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 300px; /* Limit height for scroll */
+            overflow-y: auto;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -276,8 +334,7 @@
 
         <div id="stats-section" style="display: none;">
             <div class="stats-grid" id="statsGrid">
-                <!-- Stats will be loaded here -->
-            </div>
+                </div>
         </div>
 
         <div class="spaces-container">
@@ -305,9 +362,27 @@
         </div>
     </div>
 
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <h2>Space Details</h2>
+            <div class="modal-body">
+                <pre id="modalContent"></pre>
+            </div>
+        </div>
+    </div>
+
     <script>
         let apiBaseUrl = 'https://46ziigjlif.execute-api.us-east-2.amazonaws.com/prod/';
+        // This is the base URL for your S3 bucket where MP3 files are stored
+        const s3BaseUrl = 'https://twitter-spaces-audio-streams-865712988605.s3.us-east-2.amazonaws.com/';
+        let mp3FilesMap = {}; // Stores a map of slugified space keys to S3 MP3 URLs
 
+        /**
+         * Displays a temporary message (error or success) on the page.
+         * @param {string} message - The message to display.
+         * @param {string} type - The type of message ('error' or 'success').
+         */
         function showMessage(message, type = 'error') {
             const existing = document.querySelector('.error, .success');
             if (existing) existing.remove();
@@ -320,7 +395,46 @@
             setTimeout(() => div.remove(), 5000);
         }
 
-        function connectToAPI() {
+        /**
+         * Opens the modal with the given title and content.
+         * @param {string} title - The title for the modal.
+         * @param {string} content - The content to display in the modal.
+         */
+        function openModal(title, content) {
+            document.querySelector('#detailModal h2').textContent = title;
+            document.getElementById('modalContent').textContent = content;
+            document.getElementById('detailModal').style.display = 'flex'; // Use flex to center
+        }
+
+        /**
+         * Closes the currently open modal.
+         */
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        /**
+         * Slugifies a given text string.
+         * Used to create consistent keys for matching spaces with MP3 files.
+         * @param {string} text - The input text.
+         * @returns {string} The slugified text.
+         */
+        function slugify(text) {
+            if (!text) return '';
+            return String(text)
+                .normalize('NFD') // Normalize diacritics
+                .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+                .toLowerCase()
+                .trim()
+                .replace(/\s+/g, '-')           // Replace spaces with -
+                .replace(/[^\w-]+/g, '')       // Remove all non-word chars
+                .replace(/--+/g, '-');         // Replace multiple - with single -
+        }
+
+        /**
+         * Connects to the API, loads stats, spaces, and MP3 files.
+         */
+        async function connectToAPI() {
             const url = document.getElementById('apiUrl').value.trim();
             if (!url) {
                 showMessage('Please enter your API Gateway URL');
@@ -330,11 +444,18 @@
             // Ensure URL ends with /
             apiBaseUrl = url.endsWith('/') ? url : url + '/';
             
-            showMessage('Connected! Loading stats and spaces...', 'success');
+            showMessage('Connected! Loading data...', 'success');
+            await loadMp3Files(); // Load MP3 files first, as displaySpaces depends on them
             loadStats();
             loadSpaces();
         }
 
+        /**
+         * Makes an asynchronous request to the API endpoint.
+         * @param {string} endpoint - The API endpoint to call.
+         * @returns {Promise<Object>} The JSON response from the API.
+         * @throws {Error} If the API base URL is not set or the request fails.
+         */
         async function makeAPIRequest(endpoint) {
             if (!apiBaseUrl) {
                 throw new Error('Please connect to API first');
@@ -342,12 +463,25 @@
 
             const response = await fetch(apiBaseUrl + endpoint);
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Try to read error message from response body if available
+                let errorDetails = response.statusText;
+                try {
+                    const errorJson = await response.json();
+                    if (errorJson.message) {
+                        errorDetails = errorJson.message;
+                    }
+                } catch (e) {
+                    // Ignore JSON parsing error, use statusText
+                }
+                throw new Error(`HTTP ${response.status}: ${errorDetails}`);
             }
             
             return await response.json();
         }
 
+        /**
+         * Loads statistics from the API and displays them.
+         */
         async function loadStats() {
             try {
                 const data = await makeAPIRequest('stats');
@@ -359,6 +493,10 @@
             }
         }
 
+        /**
+         * Displays the fetched statistics in the dashboard.
+         * @param {Object} stats - The statistics data.
+         */
         function displayStats(stats) {
             const statsGrid = document.getElementById('statsGrid');
             statsGrid.innerHTML = `
@@ -385,6 +523,43 @@
             `;
         }
 
+        /**
+         * Loads MP3 file information from the API and populates the mp3FilesMap.
+         */
+        async function loadMp3Files() {
+            try {
+                const data = await makeAPIRequest('files');
+                mp3FilesMap = {}; // Clear previous map
+
+                if (data.files && Array.isArray(data.files)) {
+                    data.files.forEach(file => {
+                        const parts = file.name.split('/');
+                        if (parts.length >= 3) {
+                            const hostUsername = parts[0]; // e.g., 'garycardone'
+                            const filename = parts[2]; // e.g., 'garycardone-Bitcoin-is-a-speculative-investment-w-GC-and-friends.mp3'
+
+                            // Remove host username and .mp3 extension from filename to get the title slug part
+                            let titleSlugPart = filename.replace(`${hostUsername}-`, '');
+                            if (titleSlugPart.endsWith('.mp3')) {
+                                titleSlugPart = titleSlugPart.slice(0, -4); // Remove .mp3
+                            }
+                            
+                            // The key for mapping should be slugified host username + '-' + slugified title slug part
+                            const key = slugify(hostUsername) + '-' + slugify(titleSlugPart);
+                            mp3FilesMap[key] = s3BaseUrl + file.name;
+                        }
+                    });
+                    console.log('MP3 files loaded and mapped:', mp3FilesMap);
+                }
+            } catch (error) {
+                showMessage(`Failed to load MP3 file list: ${error.message}`);
+                console.error('MP3 files error:', error);
+            }
+        }
+
+        /**
+         * Loads Twitter Spaces data from the API based on filters and displays them.
+         */
         async function loadSpaces() {
             const spacesContent = document.getElementById('spacesContent');
             spacesContent.innerHTML = '<div class="loading">Loading spaces...</div>';
@@ -407,6 +582,10 @@
             }
         }
 
+        /**
+         * Displays the fetched Twitter Spaces in the dashboard.
+         * @param {Array<Object>} spaces - An array of Twitter Space objects.
+         */
         function displaySpaces(spaces) {
             const spacesContent = document.getElementById('spacesContent');
             
@@ -415,31 +594,42 @@
                 return;
             }
 
-            spacesContent.innerHTML = spaces.map(space => `
-                <div class="space-item">
-                    <div class="space-title">${space.title || 'Untitled Space'}</div>
-                    <div class="space-host">
-                        🎙️ ${space.host?.displayName || space.host?.username || 'Unknown Host'}
-                        ${space.host?.username ? `(@${space.host.username})` : ''}
+            spacesContent.innerHTML = spaces.map(space => {
+                // Generate a key for the space to look up in mp3FilesMap
+                // Use the host's username and the space's title, both slugified.
+                const spaceKey = slugify(space.host?.username || '') + '-' + slugify(space.title || '');
+                const mp3Url = mp3FilesMap[spaceKey];
+                
+                return `
+                    <div class="space-item">
+                        <div class="space-title">${space.title || 'Untitled Space'}</div>
+                        <div class="space-host">
+                            🎙️ ${space.host?.displayName || space.host?.username || 'Unknown Host'}
+                            ${space.host?.username ? `(@${space.host.username})` : ''}
+                        </div>
+                        <div class="space-meta">
+                            <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
+                                ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
+                            </span>
+                            <span class="space-badge badge-participants">
+                                👥 ${space.participantCount || 0} participants
+                            </span>
+                            ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
+                        </div>
+                        <div class="space-actions">
+                            <button class="btn-small" onclick="viewSpaceDetails('${space._id}')">View Details</button>
+                            <button class="btn-small" onclick="viewParticipants('${space._id}')">View Participants</button>
+                            ${mp3Url ? `<button class="btn-small" onclick="window.open('${mp3Url}', '_blank')">🎧 Listen</button>` : ''}
+                        </div>
                     </div>
-                    <div class="space-meta">
-                        <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
-                            ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
-                        </span>
-                        <span class="space-badge badge-participants">
-                            👥 ${space.participantCount || 0} participants
-                        </span>
-                        ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
-                    </div>
-                    <div class="space-actions">
-                        <button class="btn-small" onclick="viewSpaceDetails('${space._id}')">View Details</button>
-                        <button class="btn-small" onclick="viewParticipants('${space._id}')">View Participants</button>
-                        ${space.hlsUrl ? `<button class="btn-small" onclick="window.open('${space.hlsUrl}', '_blank')">🎥 Stream</button>` : ''}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
+        /**
+         * Fetches and displays detailed information for a specific space.
+         * @param {string} spaceId - The ID of the space to view.
+         */
         async function viewSpaceDetails(spaceId) {
             try {
                 const data = await makeAPIRequest(`spaces/${spaceId}`);
@@ -456,19 +646,23 @@ ${space.hlsUrl ? `\nStream URL: ${space.hlsUrl}` : ''}
 ${space.description ? `\nDescription: ${space.description}` : ''}
                 `.trim();
                 
-                alert(details);
+                openModal('Space Details', details); // Use modal instead of alert
             } catch (error) {
                 showMessage(`Failed to load space details: ${error.message}`);
             }
         }
 
+        /**
+         * Fetches and displays the list of participants for a specific space.
+         * @param {string} spaceId - The ID of the space to view participants for.
+         */
         async function viewParticipants(spaceId) {
             try {
                 const data = await makeAPIRequest(`spaces/${spaceId}/participants`);
                 const participants = data.participants || [];
                 
                 if (participants.length === 0) {
-                    alert('No participants found for this space');
+                    openModal('Participants', 'No participants found for this space'); // Use modal
                     return;
                 }
                 
@@ -476,7 +670,7 @@ ${space.description ? `\nDescription: ${space.description}` : ''}
                     .map(p => `${p.name || p.username || 'Unknown'} (${p.role || 'listener'})`)
                     .join('\n');
                 
-                alert(`Participants in "${data.spaceTitle || 'Space'}":\n\n${participantsList}`);
+                openModal(`Participants in "${data.spaceTitle || 'Space'}"`, participantsList); // Use modal
             } catch (error) {
                 showMessage(`Failed to load participants: ${error.message}`);
             }
@@ -487,13 +681,23 @@ ${space.description ? `\nDescription: ${space.description}` : ''}
             const savedUrl = localStorage.getItem('spacesApiUrl');
             if (savedUrl) {
                 document.getElementById('apiUrl').value = savedUrl;
+                // Automatically connect on load if a URL is saved
+                connectToAPI();
             }
         });
 
-        // Save URL to localStorage when connecting
+        // Save URL to localStorage when API URL input changes
         document.getElementById('apiUrl').addEventListener('change', (e) => {
             localStorage.setItem('spacesApiUrl', e.target.value);
         });
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
     </script>
 </body>
 </html>
