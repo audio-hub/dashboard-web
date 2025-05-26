@@ -1,5 +1,6 @@
 /**
  * Dashboard management for the Twitter Spaces Dashboard
+ * Enhanced with chronological sorting functionality
  */
 
 class Dashboard {
@@ -83,11 +84,56 @@ class Dashboard {
             const filters = this.getFilterValues();
             const data = await api.getSpaces(filters);
             this.allSpaces = data.data; // Store for debugging
-            this.displaySpaces(data.data);
+            
+            // Sort spaces before displaying
+            const sortedSpaces = this.sortSpaces(data.data);
+            this.displaySpaces(sortedSpaces);
         } catch (error) {
             this.spacesContent.innerHTML = `<div class="error">Failed to load spaces: ${error.message}</div>`;
             console.error('Spaces error:', error);
         }
+    }
+
+    /**
+     * Sorts spaces with live spaces first, then chronologically
+     * @param {Array<Object>} spaces - Array of space objects
+     * @returns {Array<Object>} Sorted array of spaces
+     */
+    sortSpaces(spaces) {
+        if (!spaces || !Array.isArray(spaces)) return [];
+
+        return spaces.sort((a, b) => {
+            // First priority: Live spaces come first
+            if (a.isLive && !b.isLive) return -1;
+            if (!a.isLive && b.isLive) return 1;
+
+            // Second priority: Sort by date
+            // For live spaces: most recently started first
+            // For ended spaces: most recently ended first
+            const dateA = this.getRelevantDate(a);
+            const dateB = this.getRelevantDate(b);
+
+            // Sort in descending order (newest first)
+            return new Date(dateB) - new Date(dateA);
+        });
+    }
+
+    /**
+     * Gets the most relevant date for sorting a space
+     * @param {Object} space - Space object
+     * @returns {string} Date string
+     */
+    getRelevantDate(space) {
+        // Priority order for date selection:
+        // 1. lastUpdated (most current activity)
+        // 2. endedAt (for ended spaces)
+        // 3. startedAt (when the space began)
+        // 4. createdAt (fallback)
+        return space.lastUpdated || 
+               space.endedAt || 
+               space.startedAt || 
+               space.createdAt || 
+               new Date(0).toISOString(); // Fallback to epoch if no date available
     }
 
     /**
@@ -102,7 +148,7 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with better MP3 matching.
+     * Enhanced space display with better MP3 matching and sorting indicators.
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -113,7 +159,20 @@ class Dashboard {
             return;
         }
 
-        this.spacesContent.innerHTML = spaces.map(space => {
+        // Add sorting info header
+        const liveCount = spaces.filter(s => s.isLive).length;
+        const endedCount = spaces.length - liveCount;
+        
+        let sortingInfo = '';
+        if (liveCount > 0 && endedCount > 0) {
+            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces first, then ${endedCount} ended spaces (most recent first)</div>`;
+        } else if (liveCount > 0) {
+            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces (most recent first)</div>`;
+        } else if (endedCount > 0) {
+            sortingInfo = `<div class="sorting-info">Showing ${endedCount} ended spaces (most recent first)</div>`;
+        }
+
+        this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
             const host = space.host?.username || '';
             const title = space.title || '';
             const possibleKeys = api.getMappingKeys(host, title);
@@ -125,13 +184,16 @@ class Dashboard {
     }
 
     /**
-     * Creates HTML for a single space item
+     * Creates HTML for a single space item with enhanced date display
      * @param {Object} space - Space object
      * @param {string|null} mp3Url - MP3 URL if available
      * @param {string|null} foundKey - The key that was matched
      * @returns {string} HTML string
      */
     createSpaceItemHTML(space, mp3Url, foundKey) {
+        const relevantDate = this.getRelevantDate(space);
+        const timeDisplay = this.formatTimeDisplay(space, relevantDate);
+        
         return `
             <div class="space-item">
                 <div class="space-title">${space.title || 'Untitled Space'}</div>
@@ -146,6 +208,9 @@ class Dashboard {
                     <span class="space-badge badge-participants">
                         👥 ${space.participantCount || 0} participants
                     </span>
+                    <span class="space-badge badge-time">
+                        ${timeDisplay}
+                    </span>
                     ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
                     ${foundKey ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
                 </div>
@@ -157,6 +222,41 @@ class Dashboard {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Formats time display based on space status
+     * @param {Object} space - Space object
+     * @param {string} relevantDate - The relevant date for this space
+     * @returns {string} Formatted time display
+     */
+    formatTimeDisplay(space, relevantDate) {
+        const date = new Date(relevantDate);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (space.isLive) {
+            if (diffMins < 60) {
+                return `🕐 Started ${diffMins}m ago`;
+            } else if (diffHours < 24) {
+                return `🕐 Started ${diffHours}h ago`;
+            } else {
+                return `🕐 Started ${diffDays}d ago`;
+            }
+        } else {
+            if (diffMins < 60) {
+                return `⏱️ Ended ${diffMins}m ago`;
+            } else if (diffHours < 24) {
+                return `⏱️ Ended ${diffHours}h ago`;
+            } else if (diffDays < 7) {
+                return `⏱️ Ended ${diffDays}d ago`;
+            } else {
+                return `⏱️ ${date.toLocaleDateString()}`;
+            }
+        }
     }
 
     /**
@@ -233,5 +333,4 @@ class Dashboard {
 
 // Create global instance
 const dashboard = new Dashboard();
-window.dashboard = dashboard;	
-
+window.dashboard = dashboard;
