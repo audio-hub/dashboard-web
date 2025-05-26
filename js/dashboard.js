@@ -1,6 +1,6 @@
 /**
- * Dashboard management for the Twitter Spaces Dashboard
- * Enhanced with chronological sorting functionality
+ * Enhanced Dashboard management with X.com space links
+ * Modified version of js/dashboard.js
  */
 
 class Dashboard {
@@ -148,7 +148,34 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with better MP3 matching and sorting indicators.
+     * Constructs X.com URL for a space
+     * @param {Object} space - Space object
+     * @returns {string|null} X.com URL or null if not constructible
+     */
+    getSpaceUrl(space) {
+        // Try multiple approaches to construct the URL
+        
+        // Method 1: If we have a direct spaceId
+        if (space.spaceId) {
+            return `https://x.com/i/spaces/${space.spaceId}`;
+        }
+        
+        // Method 2: If we have _id that looks like a space ID
+        if (space._id && space._id.length > 10) {
+            return `https://x.com/i/spaces/${space._id}`;
+        }
+        
+        // Method 3: If we have host username, try to construct from that
+        if (space.host?.username) {
+            // This might not always work for ended spaces, but worth trying
+            return `https://x.com/${space.host.username}`;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Enhanced space display with X.com links
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -178,19 +205,21 @@ class Dashboard {
             const possibleKeys = api.getMappingKeys(host, title);
             const mp3Url = api.getMp3Url(host, title);
             const foundKey = possibleKeys.find(key => api.getMp3FilesMap()[key]);
+            const spaceUrl = this.getSpaceUrl(space);
             
-            return this.createSpaceItemHTML(space, mp3Url, foundKey);
+            return this.createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl);
         }).join('');
     }
 
     /**
-     * Creates HTML for a single space item with enhanced date display
+     * Creates HTML for a single space item with enhanced date display and X.com link
      * @param {Object} space - Space object
      * @param {string|null} mp3Url - MP3 URL if available
      * @param {string|null} foundKey - The key that was matched
+     * @param {string|null} spaceUrl - X.com URL for the space
      * @returns {string} HTML string
      */
-    createSpaceItemHTML(space, mp3Url, foundKey) {
+    createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl) {
         const relevantDate = this.getRelevantDate(space);
         const timeDisplay = this.formatTimeDisplay(space, relevantDate);
         
@@ -216,6 +245,7 @@ class Dashboard {
                 </div>
                 ${foundKey ? `<div class="debug-info">Matched: ${foundKey}</div>` : ''}
                 <div class="space-actions">
+                    ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
                     <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
                     <button class="btn-small" onclick="dashboard.viewParticipants('${space._id}')">View Participants</button>
                     ${mp3Url ? `<button class="btn-small" onclick="window.open('${mp3Url}', '_blank')">🎧 Listen</button>` : ''}
@@ -307,10 +337,12 @@ class Dashboard {
             const title = space.title || '';
             const possibleKeys = api.getMappingKeys(host, title);
             const foundKey = possibleKeys.find(key => mp3Map[key]);
+            const spaceUrl = this.getSpaceUrl(space);
             
             debugInfo += `\nSpace: "${title}" by @${host}\n`;
             debugInfo += `  Keys tried: ${possibleKeys.join(', ')}\n`;
             debugInfo += `  Match found: ${foundKey ? 'YES (' + foundKey + ')' : 'NO'}\n`;
+            debugInfo += `  X.com URL: ${spaceUrl || 'Could not construct'}\n`;
         });
         
         modal.showDebugInfo(debugInfo);

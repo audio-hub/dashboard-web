@@ -12,6 +12,17 @@ body {
     color: #333;
 }
 
+.btn-primary {
+    background: #1da1f2 !important;
+    color: white !important;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background: #1a91da !important;
+    color: white !important;
+}
+
 /* Layout */
 .container {
     max-width: 1200px;
