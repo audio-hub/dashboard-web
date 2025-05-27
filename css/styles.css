@@ -152,6 +152,16 @@ body {
     align-items: center;
 }
 
+/* Sorting Info */
+.sorting-info {
+    background: #f8f9fa;
+    padding: 12px 20px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+    color: #666;
+    text-align: center;
+}
+
 /* Space Items */
 .space-item {
     padding: 20px;
@@ -192,8 +202,10 @@ body {
     border-radius: 4px;
     font-size: 0.8rem;
     font-weight: 500;
+    cursor: help; /* Shows help cursor on hover for tooltips */
 }
 
+/* Status Badges */
 .badge-live {
     background: #ff4444;
     color: white;
@@ -204,9 +216,31 @@ body {
     color: white;
 }
 
+/* Privacy Badges */
+.badge-public {
+    background: #4caf50;
+    color: white;
+}
+
+.badge-private {
+    background: #ff9800;
+    color: white;
+}
+
+.badge-unknown {
+    background: #9e9e9e;
+    color: white;
+}
+
+/* Other Badges */
 .badge-participants {
     background: #e3f2fd;
     color: #1976d2;
+}
+
+.badge-time {
+    background: #f3e5f5;
+    color: #7b1fa2;
 }
 
 .space-actions {
@@ -306,4 +340,31 @@ body {
 .close-button:focus {
     color: black;
     text-decoration: none;
-    cursor:
+    cursor: pointer;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .space-meta {
+        gap: 8px;
+    }
+    
+    .space-badge {
+        font-size: 0.75rem;
+        padding: 3px 6px;
+    }
+    
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .controls input {
+        min-width: auto;
+    }
+    
+    .sorting-info {
+        font-size: 0.8rem;
+        padding: 10px 15px;
+    }
+}

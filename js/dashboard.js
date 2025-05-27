@@ -1,5 +1,5 @@
 /**
- * Enhanced Dashboard management with X.com space links
+ * Enhanced Dashboard management with X.com space links and Private/Public indicators
  * Modified version of js/dashboard.js
  */
 
@@ -175,7 +175,37 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with X.com links
+     * Determines the privacy status of a space
+     * @param {Object} space - Space object
+     * @returns {Object} Privacy information with status and badge details
+     */
+    getPrivacyInfo(space) {
+        // Handle new spaces with explicit private boolean
+        if (typeof space.private === 'boolean') {
+            return {
+                isPrivate: space.private,
+                status: space.private ? 'Private' : 'Public',
+                badge: space.private ? 'badge-private' : 'badge-public',
+                icon: space.private ? '🔒' : '📢',
+                tooltip: space.private ? 'Not recorded - Private space' : 'Recorded - Public space'
+            };
+        }
+        
+        // Fallback for older spaces without private attribute
+        // Try to infer from other indicators
+        const hasRecording = space.recordingStatus || space.hlsUrl;
+        
+        return {
+            isPrivate: null, // Unknown
+            status: hasRecording ? 'Public (inferred)' : 'Unknown',
+            badge: hasRecording ? 'badge-public' : 'badge-unknown',
+            icon: hasRecording ? '📢' : '❓',
+            tooltip: hasRecording ? 'Likely recorded based on available data' : 'Recording status unknown (older space)'
+        };
+    }
+
+    /**
+     * Enhanced space display with X.com links and privacy indicators
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -186,18 +216,33 @@ class Dashboard {
             return;
         }
 
-        // Add sorting info header
+        // Add sorting info header with privacy statistics
         const liveCount = spaces.filter(s => s.isLive).length;
         const endedCount = spaces.length - liveCount;
+        const privateCount = spaces.filter(s => s.private === true).length;
+        const publicCount = spaces.filter(s => s.private === false).length;
+        const unknownPrivacyCount = spaces.filter(s => typeof s.private !== 'boolean').length;
         
         let sortingInfo = '';
         if (liveCount > 0 && endedCount > 0) {
-            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces first, then ${endedCount} ended spaces (most recent first)</div>`;
+            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces first, then ${endedCount} ended spaces (most recent first)`;
         } else if (liveCount > 0) {
-            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces (most recent first)</div>`;
+            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces (most recent first)`;
         } else if (endedCount > 0) {
-            sortingInfo = `<div class="sorting-info">Showing ${endedCount} ended spaces (most recent first)</div>`;
+            sortingInfo = `<div class="sorting-info">Showing ${endedCount} ended spaces (most recent first)`;
         }
+        
+        // Add privacy breakdown
+        if (privateCount > 0 || publicCount > 0) {
+            sortingInfo += ` • Privacy: ${publicCount} public, ${privateCount} private`;
+            if (unknownPrivacyCount > 0) {
+                sortingInfo += `, ${unknownPrivacyCount} unknown`;
+            }
+        } else if (unknownPrivacyCount > 0) {
+            sortingInfo += ` • Privacy status unknown for all ${unknownPrivacyCount} spaces (older data)`;
+        }
+        
+        sortingInfo += '</div>';
 
         this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
             const host = space.host?.username || '';
@@ -206,20 +251,22 @@ class Dashboard {
             const mp3Url = api.getMp3Url(host, title);
             const foundKey = possibleKeys.find(key => api.getMp3FilesMap()[key]);
             const spaceUrl = this.getSpaceUrl(space);
+            const privacyInfo = this.getPrivacyInfo(space);
             
-            return this.createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl);
+            return this.createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl, privacyInfo);
         }).join('');
     }
 
     /**
-     * Creates HTML for a single space item with enhanced date display and X.com link
+     * Creates HTML for a single space item with enhanced date display, X.com link, and privacy indicator
      * @param {Object} space - Space object
      * @param {string|null} mp3Url - MP3 URL if available
      * @param {string|null} foundKey - The key that was matched
      * @param {string|null} spaceUrl - X.com URL for the space
+     * @param {Object} privacyInfo - Privacy information object
      * @returns {string} HTML string
      */
-    createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl) {
+    createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl, privacyInfo) {
         const relevantDate = this.getRelevantDate(space);
         const timeDisplay = this.formatTimeDisplay(space, relevantDate);
         
@@ -237,6 +284,9 @@ class Dashboard {
                     <span class="space-badge badge-participants">
                         👥 ${space.participantCount || 0} participants
                     </span>
+                    <span class="space-badge ${privacyInfo.badge}" title="${privacyInfo.tooltip}">
+                        ${privacyInfo.icon} ${privacyInfo.status}
+                    </span>
                     <span class="space-badge badge-time">
                         ${timeDisplay}
                     </span>
@@ -244,6 +294,7 @@ class Dashboard {
                     ${foundKey ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
                 </div>
                 ${foundKey ? `<div class="debug-info">Matched: ${foundKey}</div>` : ''}
+                ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
                 <div class="space-actions">
                     ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
                     <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
@@ -316,7 +367,7 @@ class Dashboard {
     }
 
     /**
-     * Debug function to show mapping attempts.
+     * Debug function to show mapping attempts and privacy information.
      */
     debugMapping() {
         if (this.allSpaces.length === 0) {
@@ -324,12 +375,22 @@ class Dashboard {
             return;
         }
         
-        let debugInfo = 'MP3 MAPPING DEBUG:\n\n';
+        let debugInfo = 'MP3 MAPPING & PRIVACY DEBUG:\n\n';
         const mp3Map = api.getMp3FilesMap();
         debugInfo += `Available MP3 files (${Object.keys(mp3Map).length}):\n`;
         Object.keys(mp3Map).forEach(key => {
             debugInfo += `  ${key}\n`;
         });
+        
+        // Privacy statistics
+        const privateSpaces = this.allSpaces.filter(s => s.private === true);
+        const publicSpaces = this.allSpaces.filter(s => s.private === false);
+        const unknownSpaces = this.allSpaces.filter(s => typeof s.private !== 'boolean');
+        
+        debugInfo += `\nPrivacy Breakdown:\n`;
+        debugInfo += `  Public spaces: ${publicSpaces.length}\n`;
+        debugInfo += `  Private spaces: ${privateSpaces.length}\n`;
+        debugInfo += `  Unknown/Legacy spaces: ${unknownSpaces.length}\n`;
         
         debugInfo += '\nSpaces and their mapping attempts:\n';
         this.allSpaces.forEach(space => {
@@ -338,8 +399,10 @@ class Dashboard {
             const possibleKeys = api.getMappingKeys(host, title);
             const foundKey = possibleKeys.find(key => mp3Map[key]);
             const spaceUrl = this.getSpaceUrl(space);
+            const privacyInfo = this.getPrivacyInfo(space);
             
             debugInfo += `\nSpace: "${title}" by @${host}\n`;
+            debugInfo += `  Privacy: ${privacyInfo.status} (${privacyInfo.tooltip})\n`;
             debugInfo += `  Keys tried: ${possibleKeys.join(', ')}\n`;
             debugInfo += `  Match found: ${foundKey ? 'YES (' + foundKey + ')' : 'NO'}\n`;
             debugInfo += `  X.com URL: ${spaceUrl || 'Could not construct'}\n`;

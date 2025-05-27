@@ -1,5 +1,5 @@
 /**
- * Modal management for the Twitter Spaces Dashboard
+ * Modal management for the Twitter Spaces Dashboard with Privacy Information
  */
 
 class ModalManager {
@@ -76,19 +76,46 @@ class ModalManager {
     }
 
     /**
-     * Opens modal with space details
+     * Gets privacy information for display
+     * @param {Object} space - Space object
+     * @returns {string} Privacy status string for display
+     */
+    getPrivacyDisplayInfo(space) {
+        if (typeof space.private === 'boolean') {
+            return space.private ? 
+                'Private (Not recorded)' : 
+                'Public (Recorded)';
+        }
+        
+        // Fallback for older spaces
+        const hasRecording = space.recordingStatus || space.hlsUrl;
+        return hasRecording ? 
+            'Public (Inferred from recording data)' : 
+            'Unknown (Legacy space - privacy status not tracked)';
+    }
+
+    /**
+     * Opens modal with space details including privacy information
      * @param {Object} space - Space object
      */
     showSpaceDetails(space) {
+        const privacyStatus = this.getPrivacyDisplayInfo(space);
+        
         const details = `
 Space: ${space.title || 'Untitled'}
 Host: ${space.host?.displayName || space.host?.username || 'Unknown'}
 Status: ${space.isLive ? 'LIVE' : 'ENDED'}
+Privacy: ${privacyStatus}
 Participants: ${space.participantCount || 0}
 Created: ${Utils.formatDate(space.createdAt)}
 Updated: ${Utils.formatDate(space.lastUpdated)}
+${space.startedAt ? `Started: ${Utils.formatDate(space.startedAt)}` : ''}
+${space.endedAt ? `Ended: ${Utils.formatDate(space.endedAt)}` : ''}
 ${space.hlsUrl ? `\nStream URL: ${space.hlsUrl}` : ''}
+${space.recordingStatus ? `Recording Status: ${space.recordingStatus}` : ''}
 ${space.description ? `\nDescription: ${space.description}` : ''}
+${space.spaceId ? `\nSpace ID: ${space.spaceId}` : ''}
+${typeof space.private === 'boolean' ? `\nPrivacy Explicit: ${space.private ? 'Private' : 'Public'}` : '\nPrivacy Explicit: Not specified (legacy space)'}
         `.trim();
         
         this.open('Space Details', details);
@@ -113,15 +140,14 @@ ${space.description ? `\nDescription: ${space.description}` : ''}
     }
 
     /**
-     * Opens modal with debug information
+     * Opens modal with debug information including privacy statistics
      * @param {string} debugInfo - Debug information to display
      */
     showDebugInfo(debugInfo) {
-        this.open('MP3 Mapping Debug', debugInfo);
+        this.open('MP3 Mapping & Privacy Debug', debugInfo);
     }
 }
 
 // Create global instance
 const modal = new ModalManager();
 window.modal = modal;
-
