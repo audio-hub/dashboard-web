@@ -1,5 +1,5 @@
 /**
- * API communication layer for the Twitter Spaces Dashboard
+ * API communication layer for the Twitter Spaces Dashboard with debug logging
  */
 
 class ApiService {
@@ -11,9 +11,6 @@ class ApiService {
 
     /**
      * Makes an asynchronous request to the API endpoint.
-     * @param {string} endpoint - The API endpoint to call.
-     * @returns {Promise<Object>} The JSON response from the API.
-     * @throws {Error} If the request fails.
      */
     async makeRequest(endpoint) {
         try {
@@ -39,21 +36,10 @@ class ApiService {
         }
     }
 
-    /**
-     * Fetches statistics from the API
-     * @returns {Promise<Object>} Statistics data
-     */
     async getStats() {
         return await this.makeRequest('stats');
     }
 
-    /**
-     * Fetches spaces data with optional filters
-     * @param {Object} filters - Filter options
-     * @param {string} filters.status - Status filter (live/ended)
-     * @param {number} filters.limit - Limit number of results
-     * @returns {Promise<Object>} Spaces data
-     */
     async getSpaces(filters = {}) {
         let endpoint = 'spaces?';
         const params = [];
@@ -65,81 +51,94 @@ class ApiService {
         return await this.makeRequest(endpoint);
     }
 
-    /**
-     * Fetches detailed information for a specific space
-     * @param {string} spaceId - The space ID
-     * @returns {Promise<Object>} Space details
-     */
     async getSpaceDetails(spaceId) {
         return await this.makeRequest(`spaces/${spaceId}`);
     }
 
-    /**
-     * Fetches participants for a specific space
-     * @param {string} spaceId - The space ID
-     * @returns {Promise<Object>} Participants data
-     */
     async getSpaceParticipants(spaceId) {
         return await this.makeRequest(`spaces/${spaceId}/participants`);
     }
 
-    /**
-     * Fetches available MP3 files list
-     * @returns {Promise<Object>} Files data
-     */
     async getFiles() {
         return await this.makeRequest('files');
     }
 
     /**
-     * Loads and processes MP3 files for mapping
-     * @returns {Promise<void>}
+     * Loads and processes MP3 files for mapping with debug logging
      */
     async loadMp3Files() {
         try {
+            console.log('🔄 Loading MP3 files...');
             const data = await this.getFiles();
             this.mp3FilesMap = {};
 
             if (data.files && Array.isArray(data.files)) {
-                console.log('Processing MP3 files:', data.files);
+                console.log('📁 Processing MP3 files:', data.files.length, 'files found');
                 
                 data.files.forEach(file => {
+                    console.log('\n--- Processing file ---');
+                    console.log('File path:', file.name);
+                    
                     const filePath = file.name;
                     const parts = filePath.split('/');
+                    console.log('Path parts:', parts);
                     
                     if (parts.length >= 3) {
                         const hostUsername = parts[0];
-                        const filename = parts[2];
+                        // Join everything after the date as the filename (handles slashes in filenames)
+                        const filename = parts.slice(2).join('/');
+                        
+                        // Skip files that don't end with .mp3
+                        if (!filename.toLowerCase().endsWith('.mp3')) {
+                            console.log('❌ Skipping non-MP3 file');
+                            return;
+                        }
+                        
+                        console.log('Host username:', hostUsername);
+                        console.log('Filename:', filename);
                         
                         // Extract title from filename
                         let titlePart = filename.replace(/\.mp3$/i, '');
+                        console.log('Title after removing .mp3:', titlePart);
                         
                         // Try to remove host prefix if it exists
                         const hostPrefix = `${hostUsername}-`;
+                        console.log('Host prefix to check:', hostPrefix);
+                        
                         if (titlePart.startsWith(hostPrefix)) {
                             titlePart = titlePart.substring(hostPrefix.length);
+                            console.log('Title after removing host prefix:', titlePart);
+                        } else {
+                            console.log('Host prefix not found in title');
                         }
                         
                         // Handle special cases where filename might not follow expected pattern
                         if (!titlePart || titlePart === hostUsername) {
                             titlePart = filename.replace(/\.mp3$/i, '');
+                            console.log('Using fallback title:', titlePart);
                         }
                         
                         // Create multiple possible keys for mapping
                         const possibleKeys = Utils.createMappingKeys(hostUsername, titlePart);
+                        console.log('Generated keys:', possibleKeys);
                         
                         // Store the file URL under all possible keys
                         possibleKeys.forEach(key => {
                             if (key) {
                                 this.mp3FilesMap[key] = this.s3BaseUrl + filePath;
+                                console.log(`Stored mapping: "${key}" -> URL`);
                             }
                         });
-                        
-                        console.log(`File: ${filename} -> Keys: ${possibleKeys.join(', ')}`);
+                    } else {
+                        console.log('❌ Skipping file - not enough path parts');
                     }
                 });
                 
-                console.log('Final MP3 mapping:', this.mp3FilesMap);
+                console.log('\n✅ Final MP3 mapping keys:');
+                Object.keys(this.mp3FilesMap).forEach(key => {
+                    console.log(`  "${key}"`);
+                });
+                
                 Utils.showMessage(`Loaded ${Object.keys(this.mp3FilesMap).length} MP3 file mappings`, CONFIG.MESSAGE_TYPES.SUCCESS);
             }
         } catch (error) {
@@ -150,31 +149,43 @@ class ApiService {
     }
 
     /**
-     * Gets MP3 URL for a space
-     * @param {string} host - Host username
-     * @param {string} title - Space title
-     * @returns {string|null} MP3 URL or null if not found
+     * Gets MP3 URL for a space with debug logging
      */
     getMp3Url(host, title) {
-        const possibleKeys = Utils.createMappingKeys(host, title);
-        const foundKey = possibleKeys.find(key => this.mp3FilesMap[key]);
-        return foundKey ? this.mp3FilesMap[foundKey] : null;
+        console.log('\n🔍 Looking up MP3 for:');
+        console.log('Host:', host);
+        console.log('Title:', title);
+        
+        // Normalize host username (replace = with -)
+        const normalizedHost = host.replace(/=/g, '-');
+        console.log('Normalized host:', normalizedHost);
+        
+        const possibleKeys = Utils.createMappingKeys(normalizedHost, title);
+        console.log('Generated lookup keys:', possibleKeys);
+        
+        console.log('Checking each key:');
+        for (const key of possibleKeys) {
+            const found = this.mp3FilesMap[key];
+            console.log(`  "${key}" -> ${found ? 'FOUND' : 'NOT FOUND'}`);
+            if (found) {
+                console.log('✅ Match found! Returning:', found);
+                return found;
+            }
+        }
+        
+        console.log('❌ No match found');
+        console.log('Available keys in map:');
+        Object.keys(this.mp3FilesMap).slice(0, 5).forEach(key => {
+            console.log(`  "${key}"`);
+        });
+        
+        return null;
     }
 
-    /**
-     * Gets all possible mapping keys for debugging
-     * @param {string} host - Host username
-     * @param {string} title - Space title
-     * @returns {Array<string>} Array of possible keys
-     */
     getMappingKeys(host, title) {
         return Utils.createMappingKeys(host, title);
     }
 
-    /**
-     * Gets the MP3 files mapping object
-     * @returns {Object} MP3 files mapping
-     */
     getMp3FilesMap() {
         return this.mp3FilesMap;
     }
