@@ -1,5 +1,6 @@
 /**
- * API communication layer for the Twitter Spaces Dashboard with debug logging
+ * API communication layer for the Twitter Spaces Dashboard with spaceId-based MP3 mapping
+ * Updated to use new spaceId naming convention
  */
 
 class ApiService {
@@ -64,11 +65,11 @@ class ApiService {
     }
 
     /**
-     * Loads and processes MP3 files for mapping with debug logging
+     * Loads and processes MP3 files for spaceId-based mapping
      */
     async loadMp3Files() {
         try {
-            console.log('🔄 Loading MP3 files...');
+            console.log('🔄 Loading MP3 files for spaceId mapping...');
             const data = await this.getFiles();
             this.mp3FilesMap = {};
 
@@ -85,8 +86,8 @@ class ApiService {
                     
                     if (parts.length >= 3) {
                         const hostUsername = parts[0];
-                        // Join everything after the date as the filename (handles slashes in filenames)
-                        const filename = parts.slice(2).join('/');
+                        const date = parts[1]; // e.g., "2025-05-28"
+                        const filename = parts[2]; // e.g., "1yNGaLVymagKj.mp3"
                         
                         // Skip files that don't end with .mp3
                         if (!filename.toLowerCase().endsWith('.mp3')) {
@@ -95,42 +96,25 @@ class ApiService {
                         }
                         
                         console.log('Host username:', hostUsername);
+                        console.log('Date:', date);
                         console.log('Filename:', filename);
                         
-                        // Extract title from filename
-                        let titlePart = filename.replace(/\.mp3$/i, '');
-                        console.log('Title after removing .mp3:', titlePart);
+                        // Extract spaceId from filename (remove .mp3 extension)
+                        const spaceId = filename.replace(/\.mp3$/i, '');
+                        console.log('Extracted spaceId:', spaceId);
                         
-                        // Try to remove host prefix if it exists
-                        const hostPrefix = `${hostUsername}-`;
-                        console.log('Host prefix to check:', hostPrefix);
+                        // Store using the spaceId as the key
+                        this.mp3FilesMap[spaceId] = this.s3BaseUrl + filePath;
+                        console.log(`Stored mapping: "${spaceId}" -> ${this.s3BaseUrl + filePath}`);
                         
-                        if (titlePart.startsWith(hostPrefix)) {
-                            titlePart = titlePart.substring(hostPrefix.length);
-                            console.log('Title after removing host prefix:', titlePart);
-                        } else {
-                            console.log('Host prefix not found in title');
-                        }
+                        // Also store with hostName+date+spaceId pattern for fallback
+                        const compositeKey = `${hostUsername}/${date}/${spaceId}`;
+                        this.mp3FilesMap[compositeKey] = this.s3BaseUrl + filePath;
+                        console.log(`Stored composite mapping: "${compositeKey}" -> URL`);
                         
-                        // Handle special cases where filename might not follow expected pattern
-                        if (!titlePart || titlePart === hostUsername) {
-                            titlePart = filename.replace(/\.mp3$/i, '');
-                            console.log('Using fallback title:', titlePart);
-                        }
-                        
-                        // Create multiple possible keys for mapping
-                        const possibleKeys = Utils.createMappingKeys(hostUsername, titlePart);
-                        console.log('Generated keys:', possibleKeys);
-                        
-                        // Store the file URL under all possible keys
-                        possibleKeys.forEach(key => {
-                            if (key) {
-                                this.mp3FilesMap[key] = this.s3BaseUrl + filePath;
-                                console.log(`Stored mapping: "${key}" -> URL`);
-                            }
-                        });
                     } else {
-                        console.log('❌ Skipping file - not enough path parts');
+                        console.log('❌ Skipping file - not enough path parts or wrong structure');
+                        console.log('Expected: hostName/date/spaceId.mp3');
                     }
                 });
                 
@@ -149,39 +133,136 @@ class ApiService {
     }
 
     /**
-     * Gets MP3 URL for a space with debug logging
+     * Gets MP3 URL for a space using spaceId-based mapping
+     * @param {string} spaceId - The space ID
+     * @param {string} hostUsername - Host username (for fallback path construction)
+     * @param {string} createdAt - Creation date (for fallback path construction)
+     * @returns {string|null} MP3 URL if found
      */
-    getMp3Url(host, title) {
-        console.log('\n🔍 Looking up MP3 for:');
-        console.log('Host:', host);
-        console.log('Title:', title);
+    getMp3UrlBySpaceId(spaceId, hostUsername = null, createdAt = null) {
+        console.log('\n🔍 Looking up MP3 for spaceId:', spaceId);
         
-        // Normalize host username (replace = with -)
-        const normalizedHost = host.replace(/=/g, '-');
-        console.log('Normalized host:', normalizedHost);
+        // Method 1: Direct spaceId lookup
+        console.log('Method 1: Direct spaceId lookup');
+        let mp3Url = this.mp3FilesMap[spaceId];
+        if (mp3Url) {
+            console.log('✅ Found via direct spaceId lookup:', mp3Url);
+            return mp3Url;
+        }
+        console.log('❌ No direct match for spaceId');
         
-        const possibleKeys = Utils.createMappingKeys(normalizedHost, title);
-        console.log('Generated lookup keys:', possibleKeys);
-        
-        console.log('Checking each key:');
-        for (const key of possibleKeys) {
-            const found = this.mp3FilesMap[key];
-            console.log(`  "${key}" -> ${found ? 'FOUND' : 'NOT FOUND'}`);
-            if (found) {
-                console.log('✅ Match found! Returning:', found);
-                return found;
+        // Method 2: Try composite key if we have host and date info
+        if (hostUsername && createdAt) {
+            console.log('Method 2: Composite key lookup');
+            
+            // Clean up hostname
+            const cleanHost = hostUsername.replace(/[@=]/g, '').toLowerCase();
+            
+            // Extract date part from createdAt
+            const date = new Date(createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
+            
+            const compositeKey = `${cleanHost}/${date}/${spaceId}`;
+            console.log('Trying composite key:', compositeKey);
+            
+            mp3Url = this.mp3FilesMap[compositeKey];
+            if (mp3Url) {
+                console.log('✅ Found via composite key:', mp3Url);
+                return mp3Url;
             }
+            console.log('❌ No match for composite key');
         }
         
-        console.log('❌ No match found');
-        console.log('Available keys in map:');
-        Object.keys(this.mp3FilesMap).slice(0, 5).forEach(key => {
-            console.log(`  "${key}"`);
-        });
+        // Method 3: Fallback - construct expected URL and check if key exists
+        if (hostUsername && createdAt) {
+            console.log('Method 3: Construct expected S3 URL');
+            const expectedPath = this.generateExpectedS3Path(spaceId, hostUsername, createdAt);
+            const expectedUrl = this.s3BaseUrl + expectedPath;
+            
+            console.log('Expected S3 path:', expectedPath);
+            console.log('Expected S3 URL:', expectedUrl);
+            
+            // Check if this path exists in our mapping (might be stored with different key)
+            const foundKey = Object.keys(this.mp3FilesMap).find(key => 
+                this.mp3FilesMap[key] === expectedUrl
+            );
+            
+            if (foundKey) {
+                console.log('✅ Found via expected URL construction:', expectedUrl);
+                return expectedUrl;
+            }
+            console.log('❌ Expected URL not found in mapping');
+        }
+        
+        console.log('❌ No MP3 found for space:', spaceId);
+        console.log('Available spaceId keys in map:');
+        Object.keys(this.mp3FilesMap)
+            .filter(key => !key.includes('/')) // Only show direct spaceId keys
+            .slice(0, 5)
+            .forEach(key => {
+                console.log(`  "${key}"`);
+            });
         
         return null;
     }
 
+    /**
+     * Generates expected S3 path for a space
+     * @param {string} spaceId - Space ID
+     * @param {string} hostUsername - Host username
+     * @param {string} createdAt - Creation date
+     * @returns {string} Expected S3 path
+     */
+    generateExpectedS3Path(spaceId, hostUsername, createdAt) {
+        if (!spaceId) return '';
+        
+        // Default fallback if no host/date info
+        if (!hostUsername || !createdAt) {
+            return `spaces/${spaceId}.mp3`;
+        }
+        
+        // Clean up hostname (same logic as s3-uploader.js)
+        const cleanHost = hostUsername
+            .replace(/[@]/g, '')
+            .replace(/[^a-zA-Z0-9\-_.\/]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .substring(0, 50) || 'unknown';
+        
+        // Extract date
+        const date = new Date(createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        return `${cleanHost}/${date}/${spaceId}.mp3`;
+    }
+
+    /**
+     * Legacy method for backwards compatibility - now uses spaceId internally
+     * @deprecated Use getMp3UrlBySpaceId instead
+     */
+    getMp3Url(host, title) {
+        console.log('⚠️ Using legacy getMp3Url method - this is deprecated');
+        console.log('Host:', host, 'Title:', title);
+        
+        // Try to find a space with this host and title to get spaceId
+        // This is a fallback for legacy code
+        const possibleKeys = Utils.createMappingKeys(host, title);
+        console.log('Legacy mapping keys:', possibleKeys);
+        
+        for (const key of possibleKeys) {
+            const found = this.mp3FilesMap[key];
+            if (found) {
+                console.log('✅ Found via legacy mapping:', found);
+                return found;
+            }
+        }
+        
+        console.log('❌ No legacy mapping found');
+        return null;
+    }
+
+    /**
+     * Legacy method for backwards compatibility
+     * @deprecated Use spaceId-based mapping instead
+     */
     getMappingKeys(host, title) {
         return Utils.createMappingKeys(host, title);
     }

@@ -1,6 +1,6 @@
 /**
- * Enhanced Dashboard management with X.com space links and Private/Public indicators
- * Modified version of js/dashboard.js
+ * Enhanced Dashboard management with spaceId-based MP3 mapping
+ * Updated to use new spaceId naming convention
  */
 
 class Dashboard {
@@ -205,7 +205,7 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with X.com links and privacy indicators
+     * Enhanced space display with spaceId-based MP3 mapping
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -245,28 +245,24 @@ class Dashboard {
         sortingInfo += '</div>';
 
         this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
-            const host = space.host?.username || '';
-            const title = space.title || '';
-            const possibleKeys = api.getMappingKeys(host, title);
-            const mp3Url = api.getMp3Url(host, title);
-            const foundKey = possibleKeys.find(key => api.getMp3FilesMap()[key]);
+            // NEW: Use spaceId-based mapping instead of host+title
+            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host?.username, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
             
-            return this.createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl, privacyInfo);
+            return this.createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo);
         }).join('');
     }
 
     /**
-     * Creates HTML for a single space item with enhanced date display, X.com link, and privacy indicator
+     * Creates HTML for a single space item with spaceId-based MP3 mapping
      * @param {Object} space - Space object
      * @param {string|null} mp3Url - MP3 URL if available
-     * @param {string|null} foundKey - The key that was matched
      * @param {string|null} spaceUrl - X.com URL for the space
      * @param {Object} privacyInfo - Privacy information object
      * @returns {string} HTML string
      */
-    createSpaceItemHTML(space, mp3Url, foundKey, spaceUrl, privacyInfo) {
+    createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo) {
         const relevantDate = this.getRelevantDate(space);
         const timeDisplay = this.formatTimeDisplay(space, relevantDate);
         
@@ -291,9 +287,9 @@ class Dashboard {
                         ${timeDisplay}
                     </span>
                     ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
-                    ${foundKey ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
+                    ${mp3Url ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
                 </div>
-                ${foundKey ? `<div class="debug-info">Matched: ${foundKey}</div>` : ''}
+                ${mp3Url ? `<div class="debug-info">Found MP3: ${space._id}.mp3</div>` : `<div class="debug-info">No MP3 found for space ID: ${space._id}</div>`}
                 ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
                 <div class="space-actions">
                     ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
@@ -367,7 +363,7 @@ class Dashboard {
     }
 
     /**
-     * Debug function to show mapping attempts and privacy information.
+     * Debug function to show spaceId-based mapping attempts and privacy information.
      */
     debugMapping() {
         if (this.allSpaces.length === 0) {
@@ -375,7 +371,7 @@ class Dashboard {
             return;
         }
         
-        let debugInfo = 'MP3 MAPPING & PRIVACY DEBUG:\n\n';
+        let debugInfo = 'SPACEID-BASED MP3 MAPPING & PRIVACY DEBUG:\n\n';
         const mp3Map = api.getMp3FilesMap();
         debugInfo += `Available MP3 files (${Object.keys(mp3Map).length}):\n`;
         Object.keys(mp3Map).forEach(key => {
@@ -392,19 +388,17 @@ class Dashboard {
         debugInfo += `  Private spaces: ${privateSpaces.length}\n`;
         debugInfo += `  Unknown/Legacy spaces: ${unknownSpaces.length}\n`;
         
-        debugInfo += '\nSpaces and their mapping attempts:\n';
+        debugInfo += '\nSpaces and their spaceId-based mapping:\n';
         this.allSpaces.forEach(space => {
-            const host = space.host?.username || '';
-            const title = space.title || '';
-            const possibleKeys = api.getMappingKeys(host, title);
-            const foundKey = possibleKeys.find(key => mp3Map[key]);
+            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host?.username, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
             
-            debugInfo += `\nSpace: "${title}" by @${host}\n`;
+            debugInfo += `\nSpace: "${space.title || 'Untitled'}" by @${space.host?.username || 'unknown'}\n`;
+            debugInfo += `  Space ID: ${space._id}\n`;
             debugInfo += `  Privacy: ${privacyInfo.status} (${privacyInfo.tooltip})\n`;
-            debugInfo += `  Keys tried: ${possibleKeys.join(', ')}\n`;
-            debugInfo += `  Match found: ${foundKey ? 'YES (' + foundKey + ')' : 'NO'}\n`;
+            debugInfo += `  Expected S3 path: ${api.generateExpectedS3Path(space._id, space.host?.username, space.createdAt)}\n`;
+            debugInfo += `  MP3 URL found: ${mp3Url ? 'YES' : 'NO'}\n`;
             debugInfo += `  X.com URL: ${spaceUrl || 'Could not construct'}\n`;
         });
         
