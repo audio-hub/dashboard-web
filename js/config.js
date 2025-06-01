@@ -4,10 +4,10 @@
 
 const CONFIG = {
     // API Configuration
-    API_BASE_URL: 'https://w7aws2f0oi.execute-api.us-east-2.amazonaws.com/prod/',
+    API_BASE_URL: 'https://e5oi1540h9.execute-api.us-east-2.amazonaws.com/prod/',
     
     // S3 Configuration
-    S3_BASE_URL: 'https://twitter-spaces-audio-streams-865712988605.s3.us-east-2.amazonaws.com/',
+    S3_BASE_URL: 'https://spaces-api-audio-files-985923204742-us-east-2.s3.us-east-2.amazonaws.com/',
     
     // UI Configuration
     DEFAULT_LIMIT: 10,
