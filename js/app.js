@@ -1,6 +1,6 @@
 /**
  * Main application initialization and event handling
- * Updated to reduce annoying auto-updates
+ * Updated to reduce annoying auto-updates and ensure proper dashboard initialization
  */
 
 class App {
@@ -36,6 +36,13 @@ class App {
         if (this.isInitialized) return;
 
         try {
+            // Ensure dashboard is available before proceeding
+            if (typeof dashboard === 'undefined') {
+                console.error('Dashboard not available, retrying in 100ms...');
+                setTimeout(() => this.start(), 100);
+                return;
+            }
+
             Utils.showMessage('Loading data...', CONFIG.MESSAGE_TYPES.SUCCESS);
             
             // Load MP3 files mapping first
@@ -67,13 +74,21 @@ class App {
 
         if (statusFilter) {
             statusFilter.addEventListener('change', 
-                Utils.debounce(() => dashboard.loadSpaces(), 300)
+                Utils.debounce(() => {
+                    if (window.dashboard) {
+                        dashboard.loadSpaces();
+                    }
+                }, 300)
             );
         }
 
         if (limitFilter) {
             limitFilter.addEventListener('change', 
-                Utils.debounce(() => dashboard.loadSpaces(), 300)
+                Utils.debounce(() => {
+                    if (window.dashboard) {
+                        dashboard.loadSpaces();
+                    }
+                }, 300)
             );
         }
 
@@ -82,13 +97,17 @@ class App {
             // Ctrl/Cmd + R to refresh (prevent default browser refresh)
             if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
                 event.preventDefault();
-                dashboard.refreshAll();
+                if (window.dashboard) {
+                    dashboard.refreshAll();
+                }
             }
             
             // Ctrl/Cmd + D for debug
             if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
                 event.preventDefault();
-                dashboard.debugMapping();
+                if (window.dashboard) {
+                    dashboard.debugMapping();
+                }
             }
 
             // Ctrl/Cmd + A to toggle auto-refresh
@@ -102,7 +121,7 @@ class App {
         window.addEventListener('online', () => {
             Utils.showMessage('Connection restored', CONFIG.MESSAGE_TYPES.SUCCESS);
             // Only refresh if user manually requests or if auto-refresh is enabled
-            if (this.autoRefreshEnabled) {
+            if (this.autoRefreshEnabled && window.dashboard) {
                 dashboard.refreshAll();
             }
         });
@@ -121,7 +140,7 @@ class App {
                 }
                 
                 // Only auto-refresh if enabled and after a longer delay (30 seconds)
-                if (this.autoRefreshEnabled) {
+                if (this.autoRefreshEnabled && window.dashboard) {
                     this.visibilityRefreshTimeout = setTimeout(() => {
                         dashboard.refreshAll();
                     }, 30000); // 30 second delay
@@ -153,7 +172,7 @@ class App {
         
         // Auto-refresh every 5 minutes instead of frequent updates
         this.autoRefreshInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') {
+            if (document.visibilityState === 'visible' && window.dashboard) {
                 console.log('Auto-refreshing data...');
                 dashboard.refreshAll();
             }
@@ -198,8 +217,8 @@ class App {
         return {
             isInitialized: this.isInitialized,
             autoRefreshEnabled: this.autoRefreshEnabled,
-            spacesCount: dashboard.allSpaces.length,
-            mp3FilesCount: Object.keys(api.getMp3FilesMap()).length,
+            spacesCount: window.dashboard ? dashboard.allSpaces.length : 0,
+            mp3FilesCount: window.api ? Object.keys(api.getMp3FilesMap()).length : 0,
             timestamp: new Date().toISOString()
         };
     }
@@ -222,6 +241,3 @@ const app = new App();
 
 // Make app globally available for debugging
 window.app = app;
-
-
-

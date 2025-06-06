@@ -1,7 +1,6 @@
-
 /**
- * Modal management for the Twitter Spaces Dashboard with Privacy Information
- * Updated to handle host as string
+ * Modal management for the Twitter Spaces Dashboard with Privacy Information and Anchor Data
+ * Updated to handle host as string and display anchor information
  */
 
 class ModalManager {
@@ -97,12 +96,33 @@ class ModalManager {
     }
 
     /**
-     * Opens modal with space details including privacy information
-     * Updated to handle host as string
+     * Gets anchor information for display
+     * @param {Object} space - Space object
+     * @returns {string} Anchor information string for display
+     */
+    getAnchorDisplayInfo(space) {
+        if (!space.anchor) {
+            return 'None - Space discovery method unknown';
+        }
+
+        const { displayName, role } = space.anchor;
+        const roleDescriptions = {
+            hosting: 'was hosting the space',
+            speaking: 'was speaking in the space',
+            listening: 'was listening to the space'
+        };
+
+        return `${displayName} (${roleDescriptions[role] || role}) - This is why the space was recorded`;
+    }
+
+    /**
+     * Opens modal with space details including privacy and anchor information
+     * Updated to handle host as string and include anchor data
      * @param {Object} space - Space object
      */
     showSpaceDetails(space) {
         const privacyStatus = this.getPrivacyDisplayInfo(space);
+        const anchorInfo = this.getAnchorDisplayInfo(space);
         
         // UPDATED: Handle host as string instead of object
         const hostDisplay = space.host || 'Unknown';
@@ -112,6 +132,7 @@ Space: ${space.title || 'Untitled'}
 Host: ${hostDisplay}
 Status: ${space.isLive ? 'LIVE' : 'ENDED'}
 Privacy: ${privacyStatus}
+Discovery Anchor: ${anchorInfo}
 Participants: ${space.participantCount || 0}
 Created: ${Utils.formatDate(space.createdAt)}
 Updated: ${Utils.formatDate(space.lastUpdated)}
@@ -122,6 +143,10 @@ ${space.recordingStatus ? `Recording Status: ${space.recordingStatus}` : ''}
 ${space.description ? `\nDescription: ${space.description}` : ''}
 ${space.spaceId ? `\nSpace ID: ${space.spaceId}` : ''}
 ${typeof space.private === 'boolean' ? `\nPrivacy Explicit: ${space.private ? 'Private' : 'Public'}` : '\nPrivacy Explicit: Not specified (legacy space)'}
+${space.anchor ? `\nAnchor Details: 
+  Display Name: ${space.anchor.displayName}
+  Role: ${space.anchor.role}
+  Explanation: This space was recorded because you follow ${space.anchor.displayName} who was ${space.anchor.role}` : '\nAnchor Details: No anchor information (discovery method unknown)'}
         `.trim();
         
         this.open('Space Details', details);
@@ -146,11 +171,11 @@ ${typeof space.private === 'boolean' ? `\nPrivacy Explicit: ${space.private ? 'P
     }
 
     /**
-     * Opens modal with debug information including privacy statistics
+     * Opens modal with debug information including privacy statistics and anchor data
      * @param {string} debugInfo - Debug information to display
      */
     showDebugInfo(debugInfo) {
-        this.open('MP3 Mapping & Privacy Debug', debugInfo);
+        this.open('MP3 Mapping, Privacy & Anchor Debug', debugInfo);
     }
 }
 

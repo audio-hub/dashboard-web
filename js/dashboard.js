@@ -1,6 +1,6 @@
 /**
- * Enhanced Dashboard management with spaceId-based MP3 mapping
- * Updated to handle host as string and reduce auto-updates
+ * Enhanced Dashboard management with spaceId-based MP3 mapping and anchor information
+ * Updated to handle host as string, reduce auto-updates, and display anchor data
  */
 
 class Dashboard {
@@ -208,7 +208,48 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with spaceId-based MP3 mapping and host as string
+     * Gets anchor information for display
+     * @param {Object} space - Space object
+     * @returns {Object} Anchor information with display details
+     */
+    getAnchorInfo(space) {
+        if (!space.anchor) {
+            return {
+                hasAnchor: false,
+                displayText: 'No anchor',
+                tooltip: 'Space was not discovered through following someone',
+                badge: 'badge-unknown',
+                icon: '❓'
+            };
+        }
+
+        const { displayName, role } = space.anchor;
+        const roleIcons = {
+            hosting: '🎙️',
+            speaking: '🗣️',
+            listening: '👂'
+        };
+        
+        const roleText = {
+            hosting: 'hosting',
+            speaking: 'speaking',
+            listening: 'listening'
+        };
+
+        return {
+            hasAnchor: true,
+            displayText: `${displayName}`,
+            role: role,
+            roleIcon: roleIcons[role] || '👤',
+            roleText: roleText[role] || role,
+            tooltip: `Space discovered because you follow ${displayName} who was ${roleText[role] || role}`,
+            badge: 'badge-participants',
+            icon: '🔗'
+        };
+    }
+
+    /**
+     * Enhanced space display with spaceId-based MP3 mapping, host as string, and anchor information
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -219,12 +260,13 @@ class Dashboard {
             return;
         }
 
-        // Add sorting info header with privacy statistics
+        // Add sorting info header with privacy and anchor statistics
         const liveCount = spaces.filter(s => s.isLive).length;
         const endedCount = spaces.length - liveCount;
         const privateCount = spaces.filter(s => s.private === true).length;
         const publicCount = spaces.filter(s => s.private === false).length;
         const unknownPrivacyCount = spaces.filter(s => typeof s.private !== 'boolean').length;
+        const withAnchorCount = spaces.filter(s => s.anchor).length;
         
         let sortingInfo = '';
         if (liveCount > 0 && endedCount > 0) {
@@ -244,6 +286,11 @@ class Dashboard {
         } else if (unknownPrivacyCount > 0) {
             sortingInfo += ` • Privacy status unknown for all ${unknownPrivacyCount} spaces (older data)`;
         }
+
+        // Add anchor information
+        if (withAnchorCount > 0) {
+            sortingInfo += ` • ${withAnchorCount} spaces discovered through following someone`;
+        }
         
         sortingInfo += '</div>';
 
@@ -252,20 +299,22 @@ class Dashboard {
             const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
+            const anchorInfo = this.getAnchorInfo(space);
             
-            return this.createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo);
+            return this.createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo, anchorInfo);
         }).join('');
     }
 
     /**
-     * Creates HTML for a single space item with spaceId-based MP3 mapping and host as string
+     * Creates HTML for a single space item with spaceId-based MP3 mapping, host as string, and anchor information
      * @param {Object} space - Space object
      * @param {string|null} mp3Url - MP3 URL if available
      * @param {string|null} spaceUrl - X.com URL for the space
      * @param {Object} privacyInfo - Privacy information object
+     * @param {Object} anchorInfo - Anchor information object
      * @returns {string} HTML string
      */
-    createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo) {
+    createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo, anchorInfo) {
         const relevantDate = this.getRelevantDate(space);
         const timeDisplay = this.formatTimeDisplay(space, relevantDate);
         
@@ -274,6 +323,7 @@ class Dashboard {
                 <div class="space-title">${space.title || 'Untitled Space'}</div>
                 <div class="space-host">
                     🎙️ ${space.host} 
+                    ${anchorInfo.hasAnchor ? `<span style="color: #666; font-size: 0.9em;">• Discovered via ${anchorInfo.roleIcon} ${anchorInfo.displayText} (${anchorInfo.roleText})</span>` : ''}
                 </div>
                 <div class="space-meta">
                     <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
@@ -285,6 +335,11 @@ class Dashboard {
                     <span class="space-badge ${privacyInfo.badge}" title="${privacyInfo.tooltip}">
                         ${privacyInfo.icon} ${privacyInfo.status}
                     </span>
+                    ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
+                        ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
+                    </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
+                        ❓ No anchor
+                    </span>`}
                     <span class="space-badge badge-time">
                         ${timeDisplay}
                     </span>
@@ -293,6 +348,7 @@ class Dashboard {
                 </div>
                 ${mp3Url ? `<div class="debug-info">Found MP3: ${space._id}.mp3</div>` : `<div class="debug-info">No MP3 found for space ID: ${space._id}</div>`}
                 ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
+                ${anchorInfo.hasAnchor ? `<div class="debug-info">Anchor: ${anchorInfo.displayText} was ${anchorInfo.roleText} (why this space was recorded)</div>` : `<div class="debug-info">No anchor info: Space discovery method unknown</div>`}
                 <div class="space-actions">
                     ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
                     <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
@@ -365,7 +421,7 @@ class Dashboard {
     }
 
     /**
-     * Debug function to show spaceId-based mapping attempts and privacy information.
+     * Debug function to show spaceId-based mapping attempts, privacy information, and anchor data.
      */
     debugMapping() {
         if (this.allSpaces.length === 0) {
@@ -373,7 +429,7 @@ class Dashboard {
             return;
         }
         
-        let debugInfo = 'SPACEID-BASED MP3 MAPPING & PRIVACY DEBUG:\n\n';
+        let debugInfo = 'SPACEID-BASED MP3 MAPPING, PRIVACY & ANCHOR DEBUG:\n\n';
         const mp3Map = api.getMp3FilesMap();
         debugInfo += `Available MP3 files (${Object.keys(mp3Map).length}):\n`;
         Object.keys(mp3Map).forEach(key => {
@@ -385,10 +441,23 @@ class Dashboard {
         const publicSpaces = this.allSpaces.filter(s => s.private === false);
         const unknownSpaces = this.allSpaces.filter(s => typeof s.private !== 'boolean');
         
+        // Anchor statistics
+        const withAnchor = this.allSpaces.filter(s => s.anchor);
+        const hostingAnchors = withAnchor.filter(s => s.anchor.role === 'hosting');
+        const speakingAnchors = withAnchor.filter(s => s.anchor.role === 'speaking');
+        const listeningAnchors = withAnchor.filter(s => s.anchor.role === 'listening');
+        
         debugInfo += `\nPrivacy Breakdown:\n`;
         debugInfo += `  Public spaces: ${publicSpaces.length}\n`;
         debugInfo += `  Private spaces: ${privateSpaces.length}\n`;
         debugInfo += `  Unknown/Legacy spaces: ${unknownSpaces.length}\n`;
+        
+        debugInfo += `\nAnchor Breakdown:\n`;
+        debugInfo += `  Spaces with anchor info: ${withAnchor.length}\n`;
+        debugInfo += `  Discovered via hosting: ${hostingAnchors.length}\n`;
+        debugInfo += `  Discovered via speaking: ${speakingAnchors.length}\n`;
+        debugInfo += `  Discovered via listening: ${listeningAnchors.length}\n`;
+        debugInfo += `  No anchor info: ${this.allSpaces.length - withAnchor.length}\n`;
         
         debugInfo += '\nSpaces and their spaceId-based mapping:\n';
         this.allSpaces.forEach(space => {
@@ -396,10 +465,12 @@ class Dashboard {
             const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
+            const anchorInfo = this.getAnchorInfo(space);
             
             debugInfo += `\nSpace: "${space.title || 'Untitled'}" by @${space.host || 'unknown'}\n`;
             debugInfo += `  Space ID: ${space._id}\n`;
             debugInfo += `  Privacy: ${privacyInfo.status} (${privacyInfo.tooltip})\n`;
+            debugInfo += `  Anchor: ${anchorInfo.hasAnchor ? `${anchorInfo.displayText} (${anchorInfo.roleText})` : 'None'}\n`;
             debugInfo += `  Expected S3 path: ${api.generateExpectedS3Path(space._id, space.host, space.createdAt)}\n`;
             debugInfo += `  MP3 URL found: ${mp3Url ? 'YES' : 'NO'}\n`;
             debugInfo += `  X.com URL: ${spaceUrl || 'Could not construct'}\n`;
@@ -433,6 +504,12 @@ class Dashboard {
         }
     }
 }
-// Create global instance
+
+// Create global instance - This is CRITICAL for app.js to work
 const dashboard = new Dashboard();
+
+// Make dashboard globally available for debugging and access from other scripts
 window.dashboard = dashboard;
+
+// Log that dashboard has been created
+console.log('Dashboard instance created and made globally available');
