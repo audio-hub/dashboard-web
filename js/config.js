@@ -4,10 +4,10 @@
 
 const CONFIG = {
     // API Configuration
-    API_BASE_URL: 'https://e5oi1540h9.execute-api.us-east-2.amazonaws.com/prod/',
+    API_BASE_URL: 'https://eb18777fwe.execute-api.us-east-2.amazonaws.com/prod/',
     
     // S3 Configuration
-    S3_BASE_URL: 'https://spaces-api-audio-files-985923204742-us-east-2.s3.us-east-2.amazonaws.com/',
+    S3_BASE_URL: 'https://spaces-api-audio-files-246233008395-us-east-2.s3.us-east-2.amazonaws.com/',
     
     // UI Configuration
     DEFAULT_LIMIT: 10,
