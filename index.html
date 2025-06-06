@@ -11,12 +11,17 @@
         <div class="header">
             <h1>🎙️ Twitter Spaces Dashboard</h1>
             <p>Monitor and explore Twitter Spaces activity</p>
+            <p style="font-size: 0.9rem; color: rgba(255,255,255,0.8); margin-top: 10px;">
+                💡 Auto-refresh disabled by default. Use buttons or <kbd>Ctrl+R</kbd> to refresh manually. 
+                Press <kbd>Ctrl+A</kbd> to toggle auto-refresh.
+            </p>
         </div>
 
         <div class="controls">
             <button onclick="dashboard.loadStats()">Refresh Stats</button>
             <button onclick="dashboard.loadSpaces()">Refresh Spaces</button>
             <button onclick="dashboard.debugMapping()">Debug MP3 Mapping</button>
+            <button onclick="app.toggleAutoRefresh()" style="background: #28a745;">Toggle Auto-Refresh</button>
         </div>
 
         <div id="stats-section" style="display: none;">

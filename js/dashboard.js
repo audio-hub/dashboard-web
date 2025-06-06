@@ -1,6 +1,6 @@
 /**
  * Enhanced Dashboard management with spaceId-based MP3 mapping
- * Updated to use new spaceId naming convention
+ * Updated to handle host as string and reduce auto-updates
  */
 
 class Dashboard {
@@ -11,6 +11,8 @@ class Dashboard {
         this.spacesContent = null;
         this.statusFilter = null;
         this.limitFilter = null;
+        this.lastRefreshTime = 0;
+        this.minRefreshInterval = 10000; // 10 seconds minimum between auto-refreshes
         this.init();
     }
 
@@ -165,10 +167,11 @@ class Dashboard {
             return `https://x.com/i/spaces/${space._id}`;
         }
         
-        // Method 3: If we have host username, try to construct from that
-        if (space.host?.username) {
+        // Method 3: If we have host (now string), try to construct from that
+        if (space.host) {
             // This might not always work for ended spaces, but worth trying
-            return `https://x.com/${space.host.username}`;
+            const cleanHost = space.host.replace(/[@]/g, '');
+            return `https://x.com/${cleanHost}`;
         }
         
         return null;
@@ -205,7 +208,7 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with spaceId-based MP3 mapping
+     * Enhanced space display with spaceId-based MP3 mapping and host as string
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -245,8 +248,8 @@ class Dashboard {
         sortingInfo += '</div>';
 
         this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
-            // NEW: Use spaceId-based mapping instead of host+title
-            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host?.username, space.createdAt);
+            // UPDATED: Use host as string instead of host.username
+            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
             
@@ -255,7 +258,7 @@ class Dashboard {
     }
 
     /**
-     * Creates HTML for a single space item with spaceId-based MP3 mapping
+     * Creates HTML for a single space item with spaceId-based MP3 mapping and host as string
      * @param {Object} space - Space object
      * @param {string|null} mp3Url - MP3 URL if available
      * @param {string|null} spaceUrl - X.com URL for the space
@@ -270,8 +273,7 @@ class Dashboard {
             <div class="space-item">
                 <div class="space-title">${space.title || 'Untitled Space'}</div>
                 <div class="space-host">
-                    🎙️ ${space.host?.displayName || space.host?.username || 'Unknown Host'}
-                    ${space.host?.username ? `(@${space.host.username})` : ''}
+                    🎙️ ${space.host} 
                 </div>
                 <div class="space-meta">
                     <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
@@ -390,14 +392,15 @@ class Dashboard {
         
         debugInfo += '\nSpaces and their spaceId-based mapping:\n';
         this.allSpaces.forEach(space => {
-            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host?.username, space.createdAt);
+            // UPDATED: Use host as string instead of host.username
+            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
             
-            debugInfo += `\nSpace: "${space.title || 'Untitled'}" by @${space.host?.username || 'unknown'}\n`;
+            debugInfo += `\nSpace: "${space.title || 'Untitled'}" by @${space.host || 'unknown'}\n`;
             debugInfo += `  Space ID: ${space._id}\n`;
             debugInfo += `  Privacy: ${privacyInfo.status} (${privacyInfo.tooltip})\n`;
-            debugInfo += `  Expected S3 path: ${api.generateExpectedS3Path(space._id, space.host?.username, space.createdAt)}\n`;
+            debugInfo += `  Expected S3 path: ${api.generateExpectedS3Path(space._id, space.host, space.createdAt)}\n`;
             debugInfo += `  MP3 URL found: ${mp3Url ? 'YES' : 'NO'}\n`;
             debugInfo += `  X.com URL: ${spaceUrl || 'Could not construct'}\n`;
         });
@@ -406,10 +409,21 @@ class Dashboard {
     }
 
     /**
-     * Refreshes all dashboard data
+     * Refreshes all dashboard data with rate limiting
      */
     async refreshAll() {
+        const now = Date.now();
+        
+        // Rate limiting: prevent refreshes more frequently than minRefreshInterval
+        if (now - this.lastRefreshTime < this.minRefreshInterval) {
+            const remainingTime = Math.ceil((this.minRefreshInterval - (now - this.lastRefreshTime)) / 1000);
+            Utils.showMessage(`Please wait ${remainingTime} seconds before refreshing again`, CONFIG.MESSAGE_TYPES.ERROR);
+            return;
+        }
+        
+        this.lastRefreshTime = now;
         Utils.showMessage('Refreshing all data...', CONFIG.MESSAGE_TYPES.SUCCESS);
+        
         try {
             await api.loadMp3Files();
             await this.loadStats();
@@ -419,7 +433,6 @@ class Dashboard {
         }
     }
 }
-
 // Create global instance
 const dashboard = new Dashboard();
 window.dashboard = dashboard;

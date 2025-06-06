@@ -1,10 +1,14 @@
 /**
  * Main application initialization and event handling
+ * Updated to reduce annoying auto-updates
  */
 
 class App {
     constructor() {
         this.isInitialized = false;
+        this.autoRefreshEnabled = false; // Disabled by default
+        this.autoRefreshInterval = null;
+        this.visibilityRefreshTimeout = null;
         this.init();
     }
 
@@ -54,7 +58,7 @@ class App {
     }
 
     /**
-     * Set up event listeners for the application
+     * Set up event listeners for the application with reduced auto-refresh
      */
     setupEventListeners() {
         // Filter change listeners with debouncing
@@ -86,27 +90,91 @@ class App {
                 event.preventDefault();
                 dashboard.debugMapping();
             }
+
+            // Ctrl/Cmd + A to toggle auto-refresh
+            if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+                event.preventDefault();
+                this.toggleAutoRefresh();
+            }
         });
 
         // Handle online/offline status
         window.addEventListener('online', () => {
             Utils.showMessage('Connection restored', CONFIG.MESSAGE_TYPES.SUCCESS);
-            dashboard.refreshAll();
+            // Only refresh if user manually requests or if auto-refresh is enabled
+            if (this.autoRefreshEnabled) {
+                dashboard.refreshAll();
+            }
         });
 
         window.addEventListener('offline', () => {
             Utils.showMessage('Connection lost - some features may not work');
+            this.stopAutoRefresh();
         });
 
-        // Handle page visibility changes (reload data when tab becomes visible)
+        // Handle page visibility changes with longer delay and user control
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && this.isInitialized) {
-                // Refresh data when tab becomes visible (user returned to tab)
-                setTimeout(() => dashboard.refreshAll(), 1000);
+                // Clear any existing timeout
+                if (this.visibilityRefreshTimeout) {
+                    clearTimeout(this.visibilityRefreshTimeout);
+                }
+                
+                // Only auto-refresh if enabled and after a longer delay (30 seconds)
+                if (this.autoRefreshEnabled) {
+                    this.visibilityRefreshTimeout = setTimeout(() => {
+                        dashboard.refreshAll();
+                    }, 30000); // 30 second delay
+                }
             }
         });
 
         console.log('Event listeners set up successfully');
+    }
+
+    /**
+     * Toggle auto-refresh functionality
+     */
+    toggleAutoRefresh() {
+        if (this.autoRefreshEnabled) {
+            this.stopAutoRefresh();
+            Utils.showMessage('Auto-refresh disabled. Use Ctrl+R or buttons to refresh manually.', CONFIG.MESSAGE_TYPES.SUCCESS);
+        } else {
+            this.startAutoRefresh();
+            Utils.showMessage('Auto-refresh enabled. Press Ctrl+A to disable.', CONFIG.MESSAGE_TYPES.SUCCESS);
+        }
+    }
+
+    /**
+     * Start auto-refresh with longer intervals
+     */
+    startAutoRefresh() {
+        this.autoRefreshEnabled = true;
+        
+        // Auto-refresh every 5 minutes instead of frequent updates
+        this.autoRefreshInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                console.log('Auto-refreshing data...');
+                dashboard.refreshAll();
+            }
+        }, 300000); // 5 minutes = 300,000ms
+    }
+
+    /**
+     * Stop auto-refresh
+     */
+    stopAutoRefresh() {
+        this.autoRefreshEnabled = false;
+        
+        if (this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+        }
+        
+        if (this.visibilityRefreshTimeout) {
+            clearTimeout(this.visibilityRefreshTimeout);
+            this.visibilityRefreshTimeout = null;
+        }
     }
 
     /**
@@ -129,6 +197,7 @@ class App {
     getStatus() {
         return {
             isInitialized: this.isInitialized,
+            autoRefreshEnabled: this.autoRefreshEnabled,
             spacesCount: dashboard.allSpaces.length,
             mp3FilesCount: Object.keys(api.getMp3FilesMap()).length,
             timestamp: new Date().toISOString()
@@ -154,10 +223,5 @@ const app = new App();
 // Make app globally available for debugging
 window.app = app;
 
-// Auto-load data when page loads (legacy compatibility)
-window.addEventListener('load', async () => {
-    // This ensures compatibility if the old load event is still expected
-    if (!app.isInitialized) {
-        await app.start();
-    }
-});
+
+

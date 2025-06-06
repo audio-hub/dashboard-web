@@ -1,5 +1,7 @@
+
 /**
  * Modal management for the Twitter Spaces Dashboard with Privacy Information
+ * Updated to handle host as string
  */
 
 class ModalManager {
@@ -96,14 +98,18 @@ class ModalManager {
 
     /**
      * Opens modal with space details including privacy information
+     * Updated to handle host as string
      * @param {Object} space - Space object
      */
     showSpaceDetails(space) {
         const privacyStatus = this.getPrivacyDisplayInfo(space);
         
+        // UPDATED: Handle host as string instead of object
+        const hostDisplay = space.host || 'Unknown';
+        
         const details = `
 Space: ${space.title || 'Untitled'}
-Host: ${space.host?.displayName || space.host?.username || 'Unknown'}
+Host: ${hostDisplay}
 Status: ${space.isLive ? 'LIVE' : 'ENDED'}
 Privacy: ${privacyStatus}
 Participants: ${space.participantCount || 0}

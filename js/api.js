@@ -1,6 +1,6 @@
 /**
  * API communication layer for the Twitter Spaces Dashboard with spaceId-based MP3 mapping
- * Updated to use new spaceId naming convention
+ * Updated to handle host as string and use new spaceId naming convention
  */
 
 class ApiService {
@@ -135,7 +135,7 @@ class ApiService {
     /**
      * Gets MP3 URL for a space using spaceId-based mapping
      * @param {string} spaceId - The space ID
-     * @param {string} hostUsername - Host username (for fallback path construction)
+     * @param {string} hostUsername - Host username (for fallback path construction) - now a string
      * @param {string} createdAt - Creation date (for fallback path construction)
      * @returns {string|null} MP3 URL if found
      */
@@ -155,7 +155,7 @@ class ApiService {
         if (hostUsername && createdAt) {
             console.log('Method 2: Composite key lookup');
             
-            // Clean up hostname
+            // Clean up hostname - host is now a string
             const cleanHost = hostUsername.replace(/[@=]/g, '').toLowerCase();
             
             // Extract date part from createdAt
@@ -208,7 +208,7 @@ class ApiService {
     /**
      * Generates expected S3 path for a space
      * @param {string} spaceId - Space ID
-     * @param {string} hostUsername - Host username
+     * @param {string} hostUsername - Host username (now a string)
      * @param {string} createdAt - Creation date
      * @returns {string} Expected S3 path
      */
@@ -220,7 +220,7 @@ class ApiService {
             return `spaces/${spaceId}.mp3`;
         }
         
-        // Clean up hostname (same logic as s3-uploader.js)
+        // Clean up hostname (same logic as s3-uploader.js) - host is now a string
         const cleanHost = hostUsername
             .replace(/[@]/g, '')
             .replace(/[^a-zA-Z0-9\-_.\/]/g, '-')
@@ -234,44 +234,10 @@ class ApiService {
         return `${cleanHost}/${date}/${spaceId}.mp3`;
     }
 
-    /**
-     * Legacy method for backwards compatibility - now uses spaceId internally
-     * @deprecated Use getMp3UrlBySpaceId instead
-     */
-    getMp3Url(host, title) {
-        console.log('⚠️ Using legacy getMp3Url method - this is deprecated');
-        console.log('Host:', host, 'Title:', title);
-        
-        // Try to find a space with this host and title to get spaceId
-        // This is a fallback for legacy code
-        const possibleKeys = Utils.createMappingKeys(host, title);
-        console.log('Legacy mapping keys:', possibleKeys);
-        
-        for (const key of possibleKeys) {
-            const found = this.mp3FilesMap[key];
-            if (found) {
-                console.log('✅ Found via legacy mapping:', found);
-                return found;
-            }
-        }
-        
-        console.log('❌ No legacy mapping found');
-        return null;
-    }
-
-    /**
-     * Legacy method for backwards compatibility
-     * @deprecated Use spaceId-based mapping instead
-     */
-    getMappingKeys(host, title) {
-        return Utils.createMappingKeys(host, title);
-    }
-
     getMp3FilesMap() {
         return this.mp3FilesMap;
     }
 }
 
-// Create global instance
 const api = new ApiService();
 window.api = api;
