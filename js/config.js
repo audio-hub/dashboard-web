@@ -4,7 +4,7 @@
 
 const CONFIG = {
     // API Configuration
-    API_BASE_URL: 'https://eb18777fwe.execute-api.us-east-2.amazonaws.com/prod/',
+    API_BASE_URL: 'https://jv5hzflmnb.execute-api.us-east-2.amazonaws.com/prod/',
     
     // S3 Configuration
     S3_BASE_URL: 'https://spaces-api-audio-files-246233008395-us-east-2.s3.us-east-2.amazonaws.com/',
