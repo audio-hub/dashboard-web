@@ -98,9 +98,9 @@ class ApiService {
                         console.log('Host username:', hostUsername);
                         console.log('Date:', date);
                         console.log('Filename:', filename);
-                        
+                        console.log()
                         // Extract spaceId from filename (remove .mp3 extension)
-                        const spaceId = filename.replace(/\.mp3$/i, '');
+                        const spaceId = filename.split('-')[0].replace(/\.mp3$/i, '');
                         console.log('Extracted spaceId:', spaceId);
                         
                         // Store using the spaceId as the key
