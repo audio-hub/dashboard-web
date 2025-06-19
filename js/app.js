@@ -50,6 +50,7 @@ class App {
             
             // Load initial data
             await Promise.all([
+                dashboard.loadHealth(),
                 dashboard.loadStats(),
                 dashboard.loadSpaces()
             ]);

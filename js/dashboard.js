@@ -47,47 +47,47 @@ class Dashboard {
      * Displays the fetched statistics in the dashboard.
      * @param {Object} stats - The statistics data.
      */
-displayStats(stats) {
-    if (!this.statsGrid) return;
+    displayStats(stats) {
+        if (!this.statsGrid) return;
 
-    // Use the actual structure from your stats.js handler
-    const totalSpaces = stats.overview.totalSpaces || 0;
-    const liveSpaces = stats.overview.liveSpaces || 0;
-    const spacesWithHLS = stats.overview.spacesWithHLS || 0; // This is your "recording capable" metric
-    const failedRecordings = totalSpaces - spacesWithHLS;
-    const successRate = totalSpaces > 0 ? Math.round((spacesWithHLS / totalSpaces) * 100) : 0;
-    
-    // Calculate public vs private spaces from your spaces data
-    // Since your stats handler doesn't provide privacy breakdown yet, we'll work with what we have
-    const recentSpaces = stats.activity.recentSpaces || 0;
+        // Use the actual structure from your stats.js handler
+        const totalSpaces = stats.overview.totalSpaces || 0;
+        const liveSpaces = stats.overview.liveSpaces || 0;
+        const spacesWithHLS = stats.overview.spacesWithHLS || 0; // This is your "recording capable" metric
+        const failedRecordings = totalSpaces - spacesWithHLS;
+        const successRate = totalSpaces > 0 ? Math.round((spacesWithHLS / totalSpaces) * 100) : 0;
+        
+        // Calculate public vs private spaces from your spaces data
+        // Since your stats handler doesn't provide privacy breakdown yet, we'll work with what we have
+        const recentSpaces = stats.activity.recentSpaces || 0;
 
-    this.statsGrid.innerHTML = `
-        <div class="stat-card">
-            <div class="stat-number">${totalSpaces}</div>
-            <div class="stat-label">Total Spaces</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${successRate}%</div>
-            <div class="stat-label">Recording Success Rate</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${failedRecordings}</div>
-            <div class="stat-label">Failed Recordings</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${liveSpaces}</div>
-            <div class="stat-label">Currently Live</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${spacesWithHLS}</div>
-            <div class="stat-label">With Audio Available</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${recentSpaces}</div>
-            <div class="stat-label">Recent (24h)</div>
-        </div>
-    `;
-}
+        this.statsGrid.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-number">${totalSpaces}</div>
+                <div class="stat-label">Total Spaces</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${successRate}%</div>
+                <div class="stat-label">Recording Success Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${failedRecordings}</div>
+                <div class="stat-label">Failed Recordings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${liveSpaces}</div>
+                <div class="stat-label">Currently Live</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${spacesWithHLS}</div>
+                <div class="stat-label">With Audio Available</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${recentSpaces}</div>
+                <div class="stat-label">Recent (24h)</div>
+            </div>
+        `;
+    }
 
     /**
      * Loads Twitter Spaces data from the API based on filters and displays them.
@@ -512,12 +512,138 @@ displayStats(stats) {
         
         try {
             await api.loadMp3Files();
+            await this.loadHealth();
             await this.loadStats();
             await this.loadSpaces();
         } catch (error) {
             Utils.showMessage(`Failed to refresh data: ${error.message}`);
         }
     }
+
+    /**
+     * Loads health status from the API and displays it.
+     */
+    async loadHealth() {
+        const healthPanel = Utils.getElementById('health-panel');
+        const healthInstances = Utils.getElementById('health-instances');
+        const fleetStatus = Utils.getElementById('fleet-status');
+        const healthSummary = Utils.getElementById('health-summary');
+
+        if (!healthPanel || !healthInstances || !fleetStatus) return;
+
+        healthInstances.innerHTML = '<div class="loading">Loading health status...</div>';
+
+        try {
+            const data = await api.getHealth();
+            this.displayHealth(data);
+            healthPanel.style.display = 'block';
+        } catch (error) {
+            healthInstances.innerHTML = `<div class="error">Failed to load health status: ${error.message}</div>`;
+            console.error('Health error:', error);
+        }
+    }
+
+    /**
+     * Displays the health status data.
+     * @param {Object} healthData - The health data from API.
+     */
+    displayHealth(healthData) {
+        const healthInstances = Utils.getElementById('health-instances');
+        const fleetStatus = Utils.getElementById('fleet-status');
+        const healthSummary = Utils.getElementById('health-summary');
+
+        if (!healthInstances || !fleetStatus || !healthSummary) return;
+
+        // Filter to max 2 instances, keeping the most recent ones
+        let instances = healthData.instances || [];
+        if (instances.length > 2) {
+            instances = instances
+                .sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen))
+                .slice(0, 2);
+        }
+
+        // Update fleet status
+        const statusClass = healthData.fleet_status === 'healthy' ? 'healthy' : 'unhealthy';
+        fleetStatus.className = `health-status ${statusClass}`;
+        fleetStatus.textContent = `${healthData.fleet_status.toUpperCase()} (${healthData.healthy_instances}/${healthData.active_instances})`;
+
+        // Display instances
+        if (instances.length === 0) {
+            healthInstances.innerHTML = '<div class="loading">No instances found</div>';
+            return;
+        }
+
+        healthInstances.innerHTML = instances.map(instance => {
+            const statusClass = instance.status === 'healthy' ? 'healthy' : 'unhealthy';
+            const uptime = this.formatUptime(instance.metrics?.uptime || 0);
+            const lastSeen = this.formatTimeSince(instance.lastSeen);
+
+            return `
+                <div class="health-instance ${statusClass}">
+                    <div class="instance-id">Instance: ${instance.id}</div>
+                    <div class="instance-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Status:</span>
+                            <span class="metric-value">${instance.status}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Uptime:</span>
+                            <span class="metric-value">${uptime}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">MongoDB:</span>
+                            <span class="metric-value">${instance.metrics?.mongodb_connected ? '✅' : '❌'}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Spaces Indexed:</span>
+                            <span class="metric-value">${instance.metrics?.spaces_indexed || 0}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Memory:</span>
+                            <span class="metric-value">${instance.metrics?.memory_usage || 0}%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Last Seen:</span>
+                            <span class="metric-value">${lastSeen}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Update summary
+        const totalSpacesIndexed = instances.reduce((sum, instance) => 
+            sum + (instance.metrics?.spaces_indexed || 0), 0);
+        
+        healthSummary.textContent = `Total spaces indexed: ${totalSpacesIndexed} • Last updated: ${new Date(healthData.timestamp).toLocaleTimeString()}`;
+    }
+
+    /**
+     * Formats uptime seconds into readable format.
+     * @param {number} seconds - Uptime in seconds.
+     * @returns {string} Formatted uptime string.
+     */
+    formatUptime(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+        return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
+    }
+
+    /**
+     * Formats time since last seen.
+     * @param {string} lastSeenTime - ISO timestamp.
+     * @returns {string} Formatted time string.
+     */
+    formatTimeSince(lastSeenTime) {
+        const diff = Date.now() - new Date(lastSeenTime).getTime();
+        const seconds = Math.floor(diff / 1000);
+        
+        if (seconds < 60) return `${seconds}s ago`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        return `${Math.floor(seconds / 3600)}h ago`;
+    }
+
 }
 
 // Create global instance - This is CRITICAL for app.js to work

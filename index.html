@@ -18,10 +18,22 @@
         </div>
 
         <div class="controls">
+            <button onclick="dashboard.loadHealth()">Refresh Health</button>
             <button onclick="dashboard.loadStats()">Refresh Stats</button>
             <button onclick="dashboard.loadSpaces()">Refresh Spaces</button>
             <button onclick="dashboard.debugMapping()">Debug MP3 Mapping</button>
             <button onclick="app.toggleAutoRefresh()" style="background: #28a745;">Toggle Auto-Refresh</button>
+        </div>
+        
+        <div id="health-panel" class="health-panel" style="display: none;">
+            <div class="health-header">
+                <h3>🏥 Fleet Health</h3>
+                <span id="fleet-status" class="health-status">Loading...</span>
+            </div>
+            <div id="health-instances" class="health-instances">
+                <div class="loading">Loading health status...</div>
+            </div>
+            <div id="health-summary" class="health-summary"></div>
         </div>
 
         <div id="stats-section" style="display: none;">

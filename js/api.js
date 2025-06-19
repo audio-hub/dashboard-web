@@ -37,6 +37,10 @@ class ApiService {
         }
     }
 
+    async getHealth() {
+        return await this.makeRequest('health/status');
+    }
+
     async getStats() {
         return await this.makeRequest('stats');
     }
