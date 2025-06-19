@@ -47,32 +47,47 @@ class Dashboard {
      * Displays the fetched statistics in the dashboard.
      * @param {Object} stats - The statistics data.
      */
-    displayStats(stats) {
-        if (!this.statsGrid) return;
+displayStats(stats) {
+    if (!this.statsGrid) return;
 
-        this.statsGrid.innerHTML = `
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.totalSpaces}</div>
-                <div class="stat-label">Total Spaces</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.liveSpaces}</div>
-                <div class="stat-label">Live Spaces</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.totalParticipants}</div>
-                <div class="stat-label">Total Participants</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.activity.recentSpaces}</div>
-                <div class="stat-label">Recent (24h)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.overview.recordingCapable}</div>
-                <div class="stat-label">Recording Capable</div>
-            </div>
-        `;
-    }
+    // Use the actual structure from your stats.js handler
+    const totalSpaces = stats.overview.totalSpaces || 0;
+    const liveSpaces = stats.overview.liveSpaces || 0;
+    const spacesWithHLS = stats.overview.spacesWithHLS || 0; // This is your "recording capable" metric
+    const failedRecordings = totalSpaces - spacesWithHLS;
+    const successRate = totalSpaces > 0 ? Math.round((spacesWithHLS / totalSpaces) * 100) : 0;
+    
+    // Calculate public vs private spaces from your spaces data
+    // Since your stats handler doesn't provide privacy breakdown yet, we'll work with what we have
+    const recentSpaces = stats.activity.recentSpaces || 0;
+
+    this.statsGrid.innerHTML = `
+        <div class="stat-card">
+            <div class="stat-number">${totalSpaces}</div>
+            <div class="stat-label">Total Spaces</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${successRate}%</div>
+            <div class="stat-label">Recording Success Rate</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${failedRecordings}</div>
+            <div class="stat-label">Failed Recordings</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${liveSpaces}</div>
+            <div class="stat-label">Currently Live</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${spacesWithHLS}</div>
+            <div class="stat-label">With Audio Available</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">${recentSpaces}</div>
+            <div class="stat-label">Recent (24h)</div>
+        </div>
+    `;
+}
 
     /**
      * Loads Twitter Spaces data from the API based on filters and displays them.
