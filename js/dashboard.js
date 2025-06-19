@@ -379,9 +379,7 @@ class Dashboard {
                     ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
                     ${mp3Url ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
                 </div>
-                ${mp3Url ? `<div class="debug-info">Found MP3: ${space._id}.mp3</div>` : `<div class="debug-info">No MP3 found for space ID: ${space._id}</div>`}
                 ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
-                ${anchorInfo.hasAnchor ? `<div class="debug-info">Anchor: ${anchorInfo.displayText} was ${anchorInfo.roleText} (why this space was recorded)</div>` : `<div class="debug-info">No anchor info: Space discovery method unknown</div>`}
                 <div class="space-actions">
                     ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
                     <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
