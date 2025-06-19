@@ -47,19 +47,30 @@ class Dashboard {
      * Displays the fetched statistics in the dashboard.
      * @param {Object} stats - The statistics data.
      */
+/**
+     * Displays the fetched statistics in the dashboard.
+     * @param {Object} stats - The statistics data.
+     */
     displayStats(stats) {
         if (!this.statsGrid) return;
 
-        // Use the actual structure from your stats.js handler
+        // Core metrics
         const totalSpaces = stats.overview.totalSpaces || 0;
         const liveSpaces = stats.overview.liveSpaces || 0;
-        const spacesWithHLS = stats.overview.spacesWithHLS || 0; // This is your "recording capable" metric
-        const failedRecordings = totalSpaces - spacesWithHLS;
-        const successRate = totalSpaces > 0 ? Math.round((spacesWithHLS / totalSpaces) * 100) : 0;
+        const recordingSuccessRate = stats.overview.recordingSuccessRate || 0;
+        const avgParticipants = stats.overview.avgParticipants || 0;
         
-        // Calculate public vs private spaces from your spaces data
-        // Since your stats handler doesn't provide privacy breakdown yet, we'll work with what we have
+        // Privacy metrics
+        const publicPercentage = stats.privacy.publicPercentage || 0;
+        const privateSpaces = stats.privacy.privateSpaces || 0;
+        
+        // Discovery metrics
+        const discoverySuccessRate = stats.discovery.discoverySuccessRate || 0;
+        const spacesWithAnchor = stats.discovery.spacesWithAnchor || 0;
+        
+        // Activity metrics
         const recentSpaces = stats.activity.recentSpaces || 0;
+        const hostDiversity = stats.activity.hostDiversity || 0;
 
         this.statsGrid.innerHTML = `
             <div class="stat-card">
@@ -67,28 +78,35 @@ class Dashboard {
                 <div class="stat-label">Total Spaces</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">${successRate}%</div>
-                <div class="stat-label">Recording Success Rate</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${failedRecordings}</div>
-                <div class="stat-label">Failed Recordings</div>
-            </div>
-            <div class="stat-card">
                 <div class="stat-number">${liveSpaces}</div>
                 <div class="stat-label">Currently Live</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">${spacesWithHLS}</div>
-                <div class="stat-label">With Audio Available</div>
+                <div class="stat-number">${recordingSuccessRate}%</div>
+                <div class="stat-label">Recording Success Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${publicPercentage}%</div>
+                <div class="stat-label">Public Spaces</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${discoverySuccessRate}%</div>
+                <div class="stat-label">Discovery Success Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${avgParticipants}</div>
+                <div class="stat-label">Avg Participants</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">${recentSpaces}</div>
                 <div class="stat-label">Recent (24h)</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-number">${hostDiversity}</div>
+                <div class="stat-label">Unique Hosts (24h)</div>
+            </div>
         `;
     }
-
     /**
      * Loads Twitter Spaces data from the API based on filters and displays them.
      */
