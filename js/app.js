@@ -229,7 +229,6 @@ class App {
             autoRefreshEnabled: this.autoRefreshEnabled,
             spacesCount: window.dashboard ? dashboard.allSpaces.length : 0,
             audioFilesCount: Object.keys(audioMap).length,
-            supportedFormats: window.api ? api.getSupportedFormats() : [],
             formatBreakdown: formatCounts,
             timestamp: new Date().toISOString()
         };

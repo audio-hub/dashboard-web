@@ -445,6 +445,59 @@ body {
     border-top: 1px solid #eee;
 }
 
+/* Audio File List Styles - Add this to your styles.css */
+
+.audio-list-container {
+    margin-top: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #e9ecef;
+}
+
+.audio-list-header {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.audio-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.audio-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.audio-item:last-child {
+    border-bottom: none;
+}
+
+.audio-filename {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #495057;
+    flex: 1;
+    margin-right: 10px;
+    word-break: break-all;
+}
+
+.btn-audio {
+    flex-shrink: 0;
+    padding: 4px 8px !important;
+    font-size: 0.8rem !important;
+    margin: 0 !important;
+}
+
+
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .space-meta {
@@ -469,4 +522,19 @@ body {
         font-size: 0.8rem;
         padding: 10px 15px;
     }
+    .audio-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .audio-filename {
+        margin-right: 0;
+        margin-bottom: 4px;
+    }
+    
+    .btn-audio {
+        align-self: flex-end;
+    }
+    
 }

@@ -285,65 +285,55 @@ class Dashboard {
      * Enhanced space display with format-agnostic audio mapping
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
-    displaySpaces(spaces) {
-        if (!this.spacesContent) return;
+displaySpaces(spaces) {
+    if (!this.spacesContent) return;
 
-        if (!spaces || spaces.length === 0) {
-            this.spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
-            return;
-        }
-
-        // Add sorting info header with audio format statistics
-        const liveCount = spaces.filter(s => s.isLive).length;
-        const endedCount = spaces.length - liveCount;
-        const privateCount = spaces.filter(s => s.private === true).length;
-        const publicCount = spaces.filter(s => s.private === false).length;
-        const unknownPrivacyCount = spaces.filter(s => typeof s.private !== 'boolean').length;
-        const withAnchorCount = spaces.filter(s => s.anchor).length;
-        
-        // Audio format statistics
-        const audioStats = this.getAudioFormatStats(spaces);
-        
-        let sortingInfo = '';
-        if (liveCount > 0 && endedCount > 0) {
-            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces first, then ${endedCount} ended spaces (most recent first)`;
-        } else if (liveCount > 0) {
-            sortingInfo = `<div class="sorting-info">Showing ${liveCount} live spaces (most recent first)`;
-        } else if (endedCount > 0) {
-            sortingInfo = `<div class="sorting-info">Showing ${endedCount} ended spaces (most recent first)`;
-        }
-        
-        // Add privacy breakdown
-        if (privateCount > 0 || publicCount > 0) {
-            sortingInfo += ` • Privacy: ${publicCount} public, ${privateCount} private`;
-            if (unknownPrivacyCount > 0) {
-                sortingInfo += `, ${unknownPrivacyCount} unknown`;
-            }
-        } else if (unknownPrivacyCount > 0) {
-            sortingInfo += ` • Privacy status unknown for all ${unknownPrivacyCount} spaces (older data)`;
-        }
-
-        // Add anchor information
-        if (withAnchorCount > 0) {
-            sortingInfo += ` • ${withAnchorCount} spaces discovered through following someone`;
-        }
-
-        // Add audio format information
-        if (audioStats.totalWithAudio > 0) {
-            sortingInfo += ` • Audio: ${audioStats.totalWithAudio} recordings (${audioStats.formatBreakdown})`;
-        }
-        
-        sortingInfo += '</div>';
-
-        this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
-            const audioInfo = api.getAudioUrlBySpaceId(space._id, space.host, space.createdAt);
-            const spaceUrl = this.getSpaceUrl(space);
-            const privacyInfo = this.getPrivacyInfo(space);
-            const anchorInfo = this.getAnchorInfo(space);
-            
-            return this.createSpaceItemHTML(space, audioInfo, spaceUrl, privacyInfo, anchorInfo);
-        }).join('');
+    if (!spaces || spaces.length === 0) {
+        this.spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+        return;
     }
+
+    // Simple stats
+    const liveCount = spaces.filter(s => s.isLive).length;
+    const endedCount = spaces.length - liveCount;
+    const withAnchorCount = spaces.filter(s => s.anchor).length;
+    
+    // Count spaces with audio
+    let spacesWithAudio = 0;
+    let totalAudioFiles = 0;
+    let spacesWithMultipleAudio = 0;
+    
+    spaces.forEach(space => {
+        const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
+        if (audioFiles && audioFiles.length > 0) {
+            spacesWithAudio++;
+            totalAudioFiles += audioFiles.length;
+            if (audioFiles.length > 1) {
+                spacesWithMultipleAudio++;
+            }
+        }
+    });
+    
+    let sortingInfo = `<div class="sorting-info">Showing ${spaces.length} spaces`;
+    if (liveCount > 0) sortingInfo += ` (${liveCount} live)`;
+    if (withAnchorCount > 0) sortingInfo += ` • ${withAnchorCount} discovered via following`;
+    if (spacesWithAudio > 0) {
+        sortingInfo += ` • ${spacesWithAudio} with audio (${totalAudioFiles} files total)`;
+        if (spacesWithMultipleAudio > 0) {
+            sortingInfo += `, ${spacesWithMultipleAudio} with multiple files`;
+        }
+    }
+    sortingInfo += '</div>';
+
+    this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
+        const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
+        const spaceUrl = this.getSpaceUrl(space);
+        const privacyInfo = this.getPrivacyInfo(space);
+        const anchorInfo = this.getAnchorInfo(space);
+        
+        return this.createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo);
+    }).join('');
+}
 
     /**
      * Gets audio format statistics for the displayed spaces
@@ -383,59 +373,83 @@ class Dashboard {
      * @param {Object} anchorInfo - Anchor information object
      * @returns {string} HTML string
      */
-    createSpaceItemHTML(space, audioInfo, spaceUrl, privacyInfo, anchorInfo) {
-        const relevantDate = this.getRelevantDate(space);
-        const timeDisplay = this.formatTimeDisplay(space, relevantDate);
-        
-        // Audio badge with format information
-        const audioBadge = audioInfo ? 
-            `<span class="space-badge badge-participants">🎧 ${audioInfo.format.replace('.', '').toUpperCase()} Available</span>` : 
-            '';
-        
-        // Audio action button with format information
-        const audioButton = audioInfo ? 
-            `<button class="btn-small" onclick="window.open('${audioInfo.url}', '_blank')">🎧 Listen (${audioInfo.format.replace('.', '').toUpperCase()})</button>` : 
-            '';
-        
-        return `
-            <div class="space-item">
-                <div class="space-title">${space.title || 'Untitled Space'}</div>
-                <div class="space-host">
-                    🎙️ ${space.host} 
-                    ${anchorInfo.hasAnchor ? `<span style="color: #666; font-size: 0.9em;">• Discovered via ${anchorInfo.roleIcon} ${anchorInfo.displayText} (${anchorInfo.roleText})</span>` : ''}
+createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
+    const relevantDate = this.getRelevantDate(space);
+    const timeDisplay = this.formatTimeDisplay(space, relevantDate);
+    
+    // Handle multiple audio sources
+    let audioBadge = '';
+    let audioSection = '';
+    
+    if (audioFiles && audioFiles.length > 0) {
+        if (audioFiles.length === 1) {
+            audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available</span>`;
+            audioSection = `<button class="btn-small" onclick="window.open('${audioFiles[0].url}', '_blank')">🎧 Listen</button>`;
+        } else {
+            audioBadge = `<span class="space-badge badge-participants">🎧 ${audioFiles.length} Audio Files</span>`;
+            
+            // Create organized list for multiple files
+            const audioList = audioFiles.map((file, index) => {
+                const fileName = file.filename || `Audio ${index + 1}`;
+                return `
+                    <li class="audio-item">
+                        <span class="audio-filename">${fileName}</span>
+                        <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
+                    </li>
+                `;
+            }).join('');
+            
+            audioSection = `
+                <div class="audio-list-container">
+                    <div class="audio-list-header">Audio Files:</div>
+                    <ul class="audio-list">
+                        ${audioList}
+                    </ul>
                 </div>
-                <div class="space-meta">
-                    <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
-                        ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
-                    </span>
-                    <span class="space-badge badge-participants">
-                        👥 ${space.participantCount || 0} participants
-                    </span>
-                    <span class="space-badge ${privacyInfo.badge}" title="${privacyInfo.tooltip}">
-                        ${privacyInfo.icon} ${privacyInfo.status}
-                    </span>
-                    ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
-                        ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
-                    </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
-                        ❓ No anchor
-                    </span>`}
-                    <span class="space-badge badge-time">
-                        ${timeDisplay}
-                    </span>
-                    ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
-                    ${audioBadge}
-                </div>
-                ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
-                <div class="space-actions">
-                    ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
-                    <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
-                    <button class="btn-small" onclick="dashboard.viewParticipants('${space._id}')">View Participants</button>
-                    ${audioButton}
-                </div>
-            </div>
-        `;
+            `;
+        }
     }
+    
+    return `
+        <div class="space-item">
+            <div class="space-title">${space.title || 'Untitled Space'}</div>
+            <div class="space-host">
+                🎙️ ${space.host} 
+                ${anchorInfo.hasAnchor ? `<span style="color: #666; font-size: 0.9em;">• Discovered via ${anchorInfo.roleIcon} ${anchorInfo.displayText} (${anchorInfo.roleText})</span>` : ''}
+            </div>
+            <div class="space-meta">
+                <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
+                    ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
+                </span>
+                <span class="space-badge badge-participants">
+                    👥 ${space.participantCount || 0} participants
+                </span>
+                <span class="space-badge ${privacyInfo.badge}" title="${privacyInfo.tooltip}">
+                    ${privacyInfo.icon} ${privacyInfo.status}
+                </span>
+                ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
+                    ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
+                </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
+                    ❓ No anchor
+                </span>`}
+                <span class="space-badge badge-time">
+                    ${timeDisplay}
+                </span>
+                ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
+                ${audioBadge}
+            </div>
+            ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
 
+            <div class="space-actions">
+                ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
+                <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
+                <button class="btn-small" onclick="dashboard.viewParticipants('${space._id}')">View Participants</button>
+                ${audioFiles && audioFiles.length === 1 ? audioSection : ''}
+            </div>
+            ${audioFiles && audioFiles.length > 1 ? audioSection : ''}
+        </div>
+    `;
+}
     /**
      * Formats time display based on space status
      * @param {Object} space - Space object
