@@ -182,27 +182,6 @@ class ApiService {
         return audioFiles && audioFiles.length > 0 ? audioFiles[0] : null;
     }
 
-    // Legacy methods
-    async loadMp3Files() {
-        return await this.loadAudioFiles();
-    }
-
-    getMp3UrlBySpaceId(spaceId, hostUsername = null, createdAt = null) {
-        const audioFile = this.getAudioUrlBySpaceId(spaceId, hostUsername, createdAt);
-        return audioFile ? audioFile.url : null;
-    }
-
-    getMp3FilesMap() {
-        const legacyMap = {};
-        Object.keys(this.audioFilesMap).forEach(key => {
-            const audioFiles = this.audioFilesMap[key];
-            if (audioFiles && audioFiles.length > 0) {
-                legacyMap[key] = audioFiles[0].url;
-            }
-        });
-        return legacyMap;
-    }
-
     getAudioFilesMap() {
         return this.audioFilesMap;
     }

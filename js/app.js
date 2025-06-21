@@ -6,9 +6,7 @@
 class App {
     constructor() {
         this.isInitialized = false;
-        this.autoRefreshEnabled = false; // Disabled by default
         this.autoRefreshInterval = null;
-        this.visibilityRefreshTimeout = null;
         this.init();
     }
 
@@ -58,8 +56,11 @@ class App {
             this.setupEventListeners();
             this.isInitialized = true;
             
-            console.log('Twitter Spaces Dashboard initialized successfully with format-agnostic audio support');
-            console.log('Supported audio formats:', api.getSupportedFormats());
+            this.autoRefreshInterval = setInterval(() => {
+                if (document.visibilityState === 'visible' && window.dashboard) {
+                    dashboard.refreshAll();
+                }
+            }, 30000);
         } catch (error) {
             console.error('Failed to start application:', error);
             Utils.showMessage(`Failed to load initial data: ${error.message}`);
@@ -94,31 +95,6 @@ class App {
             );
         }
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (event) => {
-            // Ctrl/Cmd + R to refresh (prevent default browser refresh)
-            if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
-                event.preventDefault();
-                if (window.dashboard) {
-                    dashboard.refreshAll();
-                }
-            }
-            
-            // Ctrl/Cmd + D for debug
-            if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
-                event.preventDefault();
-                if (window.dashboard) {
-                    dashboard.debugMapping();
-                }
-            }
-
-            // Ctrl/Cmd + A to toggle auto-refresh
-            if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
-                event.preventDefault();
-                this.toggleAutoRefresh();
-            }
-        });
-
         // Handle online/offline status
         window.addEventListener('online', () => {
             Utils.showMessage('Connection restored', CONFIG.MESSAGE_TYPES.SUCCESS);
@@ -151,51 +127,6 @@ class App {
         });
 
         console.log('Event listeners set up successfully');
-    }
-
-    /**
-     * Toggle auto-refresh functionality
-     */
-    toggleAutoRefresh() {
-        if (this.autoRefreshEnabled) {
-            this.stopAutoRefresh();
-            Utils.showMessage('Auto-refresh disabled. Use Ctrl+R or buttons to refresh manually.', CONFIG.MESSAGE_TYPES.SUCCESS);
-        } else {
-            this.startAutoRefresh();
-            Utils.showMessage('Auto-refresh enabled. Press Ctrl+A to disable.', CONFIG.MESSAGE_TYPES.SUCCESS);
-        }
-    }
-
-    /**
-     * Start auto-refresh with longer intervals
-     */
-    startAutoRefresh() {
-        this.autoRefreshEnabled = true;
-        
-        // Auto-refresh every 5 minutes instead of frequent updates
-        this.autoRefreshInterval = setInterval(() => {
-            if (document.visibilityState === 'visible' && window.dashboard) {
-                console.log('Auto-refreshing data...');
-                dashboard.refreshAll();
-            }
-        }, 300000); // 5 minutes = 300,000ms
-    }
-
-    /**
-     * Stop auto-refresh
-     */
-    stopAutoRefresh() {
-        this.autoRefreshEnabled = false;
-        
-        if (this.autoRefreshInterval) {
-            clearInterval(this.autoRefreshInterval);
-            this.autoRefreshInterval = null;
-        }
-        
-        if (this.visibilityRefreshTimeout) {
-            clearTimeout(this.visibilityRefreshTimeout);
-            this.visibilityRefreshTimeout = null;
-        }
     }
 
     /**
