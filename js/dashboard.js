@@ -34,9 +34,9 @@ class Dashboard {
         try {
             const data = await api.getStats();
             this.displayStats(data.data);
-            if (this.statsSection) {
-                this.statsSection.style.display = 'block';
-            }
+            // if (this.statsSection) {
+            //     this.statsSection.style.display = 'block';
+            // }
         } catch (error) {
             Utils.showMessage(`Failed to load stats: ${error.message}`);
             console.error('Stats error:', error);
@@ -552,7 +552,7 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
         try {
             const data = await api.getHealth();
             this.displayHealth(data);
-            healthPanel.style.display = 'block';
+            // healthPanel.style.display = 'block';
         } catch (error) {
             healthInstances.innerHTML = `<div class="error">Failed to load health status: ${error.message}</div>`;
             console.error('Health error:', error);

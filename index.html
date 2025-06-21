@@ -13,19 +13,33 @@
             <p>Monitor and explore Twitter Spaces activity</p>
         </div>
 
-        <div id="health-panel" class="health-panel" style="display: none;">
-            <div class="health-header">
-                <h3>🏥 Fleet Health</h3>
-                <span id="fleet-status" class="health-status">Loading...</span>
+        <!-- Collapsible Health Panel -->
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleSection('health-panel')">
+                <span>🏥 Fleet Health</span>
+                <span class="toggle-icon" id="health-toggle">▼</span>
             </div>
-            <div id="health-instances" class="health-instances">
-                <div class="loading">Loading health status...</div>
+            <div id="health-panel" class="collapsible-content" style="display: none;">
+                <div class="health-header">
+                    <h3>Fleet Health</h3>
+                    <span id="fleet-status" class="health-status">Loading...</span>
+                </div>
+                <div id="health-instances" class="health-instances">
+                    <div class="loading">Loading health status...</div>
+                </div>
+                <div id="health-summary" class="health-summary"></div>
             </div>
-            <div id="health-summary" class="health-summary"></div>
         </div>
 
-        <div id="stats-section" style="display: none;">
-            <div class="stats-grid" id="statsGrid">
+        <!-- Collapsible Stats Section -->
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleSection('stats-section')">
+                <span>📊 KPIs & Statistics</span>
+                <span class="toggle-icon" id="stats-toggle">▼</span>
+            </div>
+            <div id="stats-section" class="collapsible-content" style="display: none;">
+                <div class="stats-grid" id="statsGrid">
+                </div>
             </div>
         </div>
 

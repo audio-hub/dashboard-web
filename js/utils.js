@@ -117,5 +117,27 @@ const Utils = {
     }
 };
 
+function toggleSection(sectionId) {
+    const content = document.getElementById(sectionId);
+    const toggleIcon = document.getElementById(sectionId.replace('-panel', '-toggle').replace('-section', '-toggle'));
+    
+    if (!content || !toggleIcon) return;
+    
+    const isOpen = content.style.display !== 'none';
+    
+    if (isOpen) {
+        // Close
+        content.style.display = 'none';
+        toggleIcon.classList.remove('open');
+    } else {
+        // Open
+        content.style.display = 'block';
+        toggleIcon.classList.add('open');
+    }
+}
+
+// Make it globally available
+window.toggleSection = toggleSection;
+
 // Make Utils globally available
 window.Utils = Utils;

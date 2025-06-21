@@ -496,7 +496,64 @@ body {
     margin: 0 !important;
 }
 
+/* Collapsible Section Styles - Add to styles.css */
 
+.collapsible-section {
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.collapsible-header {
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+    background: #e9ecef;
+}
+
+.collapsible-header span:first-child {
+    font-weight: 600;
+    color: #495057;
+}
+
+.toggle-icon {
+    font-size: 0.8rem;
+    color: #6c757d;
+    transition: transform 0.2s;
+}
+
+.toggle-icon.open {
+    transform: rotate(180deg);
+}
+
+.collapsible-content {
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.collapsible-content.sliding {
+    overflow: hidden;
+}
+
+/* Update existing health panel styles */
+.health-panel {
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    box-shadow: none;
+}
 
 /* Responsive Design */
 @media (max-width: 768px) {
