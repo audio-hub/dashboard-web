@@ -45,8 +45,8 @@ class App {
 
             Utils.showMessage('Loading data...', CONFIG.MESSAGE_TYPES.SUCCESS);
             
-            // Load MP3 files mapping first
-            await api.loadMp3Files();
+            // Load audio files mapping first (now supports all formats)
+            await api.loadAudioFiles(); // Updated from loadMp3Files()
             
             // Load initial data
             await Promise.all([
@@ -58,7 +58,8 @@ class App {
             this.setupEventListeners();
             this.isInitialized = true;
             
-            console.log('Twitter Spaces Dashboard initialized successfully');
+            console.log('Twitter Spaces Dashboard initialized successfully with format-agnostic audio support');
+            console.log('Supported audio formats:', api.getSupportedFormats());
         } catch (error) {
             console.error('Failed to start application:', error);
             Utils.showMessage(`Failed to load initial data: ${error.message}`);
@@ -211,15 +212,25 @@ class App {
     }
 
     /**
-     * Get application status
-     * @returns {Object} Application status information
+     * Updated status method to include audio format information
      */
     getStatus() {
+        const audioMap = window.api ? api.getAudioFilesMap() : {};
+        const formatCounts = {};
+        
+        // Count files by format
+        Object.values(audioMap).forEach(audioInfo => {
+            const format = audioInfo.format || 'unknown';
+            formatCounts[format] = (formatCounts[format] || 0) + 1;
+        });
+        
         return {
             isInitialized: this.isInitialized,
             autoRefreshEnabled: this.autoRefreshEnabled,
             spacesCount: window.dashboard ? dashboard.allSpaces.length : 0,
-            mp3FilesCount: window.api ? Object.keys(api.getMp3FilesMap()).length : 0,
+            audioFilesCount: Object.keys(audioMap).length,
+            supportedFormats: window.api ? api.getSupportedFormats() : [],
+            formatBreakdown: formatCounts,
             timestamp: new Date().toISOString()
         };
     }

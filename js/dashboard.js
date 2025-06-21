@@ -282,7 +282,7 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with spaceId-based MP3 mapping, host as string, and anchor information
+     * Enhanced space display with format-agnostic audio mapping
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      */
     displaySpaces(spaces) {
@@ -293,13 +293,16 @@ class Dashboard {
             return;
         }
 
-        // Add sorting info header with privacy and anchor statistics
+        // Add sorting info header with audio format statistics
         const liveCount = spaces.filter(s => s.isLive).length;
         const endedCount = spaces.length - liveCount;
         const privateCount = spaces.filter(s => s.private === true).length;
         const publicCount = spaces.filter(s => s.private === false).length;
         const unknownPrivacyCount = spaces.filter(s => typeof s.private !== 'boolean').length;
         const withAnchorCount = spaces.filter(s => s.anchor).length;
+        
+        // Audio format statistics
+        const audioStats = this.getAudioFormatStats(spaces);
         
         let sortingInfo = '';
         if (liveCount > 0 && endedCount > 0) {
@@ -324,32 +327,75 @@ class Dashboard {
         if (withAnchorCount > 0) {
             sortingInfo += ` • ${withAnchorCount} spaces discovered through following someone`;
         }
+
+        // Add audio format information
+        if (audioStats.totalWithAudio > 0) {
+            sortingInfo += ` • Audio: ${audioStats.totalWithAudio} recordings (${audioStats.formatBreakdown})`;
+        }
         
         sortingInfo += '</div>';
 
         this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
-            // UPDATED: Use host as string instead of host.username
-            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host, space.createdAt);
+            const audioInfo = api.getAudioUrlBySpaceId(space._id, space.host, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
             const anchorInfo = this.getAnchorInfo(space);
             
-            return this.createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo, anchorInfo);
+            return this.createSpaceItemHTML(space, audioInfo, spaceUrl, privacyInfo, anchorInfo);
         }).join('');
     }
 
     /**
-     * Creates HTML for a single space item with spaceId-based MP3 mapping, host as string, and anchor information
+     * Gets audio format statistics for the displayed spaces
+     * @param {Array<Object>} spaces - Array of spaces
+     * @returns {Object} Audio format statistics
+     */
+    getAudioFormatStats(spaces) {
+        const formatCounts = {};
+        let totalWithAudio = 0;
+
+        spaces.forEach(space => {
+            const audioInfo = api.getAudioUrlBySpaceId(space._id, space.host, space.createdAt);
+            if (audioInfo) {
+                totalWithAudio++;
+                const format = audioInfo.format.replace('.', '').toUpperCase();
+                formatCounts[format] = (formatCounts[format] || 0) + 1;
+            }
+        });
+
+        const formatBreakdown = Object.entries(formatCounts)
+            .map(([format, count]) => `${count} ${format}`)
+            .join(', ');
+
+        return {
+            totalWithAudio,
+            formatCounts,
+            formatBreakdown
+        };
+    }
+
+    /**
+     * Creates HTML for a single space item with format-agnostic audio support
      * @param {Object} space - Space object
-     * @param {string|null} mp3Url - MP3 URL if available
+     * @param {Object|null} audioInfo - Audio info object with url and format
      * @param {string|null} spaceUrl - X.com URL for the space
      * @param {Object} privacyInfo - Privacy information object
      * @param {Object} anchorInfo - Anchor information object
      * @returns {string} HTML string
      */
-    createSpaceItemHTML(space, mp3Url, spaceUrl, privacyInfo, anchorInfo) {
+    createSpaceItemHTML(space, audioInfo, spaceUrl, privacyInfo, anchorInfo) {
         const relevantDate = this.getRelevantDate(space);
         const timeDisplay = this.formatTimeDisplay(space, relevantDate);
+        
+        // Audio badge with format information
+        const audioBadge = audioInfo ? 
+            `<span class="space-badge badge-participants">🎧 ${audioInfo.format.replace('.', '').toUpperCase()} Available</span>` : 
+            '';
+        
+        // Audio action button with format information
+        const audioButton = audioInfo ? 
+            `<button class="btn-small" onclick="window.open('${audioInfo.url}', '_blank')">🎧 Listen (${audioInfo.format.replace('.', '').toUpperCase()})</button>` : 
+            '';
         
         return `
             <div class="space-item">
@@ -377,14 +423,14 @@ class Dashboard {
                         ${timeDisplay}
                     </span>
                     ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
-                    ${mp3Url ? `<span class="space-badge badge-participants">🎧 Audio Available</span>` : ''}
+                    ${audioBadge}
                 </div>
                 ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
                 <div class="space-actions">
                     ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
                     <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
                     <button class="btn-small" onclick="dashboard.viewParticipants('${space._id}')">View Participants</button>
-                    ${mp3Url ? `<button class="btn-small" onclick="window.open('${mp3Url}', '_blank')">🎧 Listen</button>` : ''}
+                    ${audioButton}
                 </div>
             </div>
         `;
@@ -452,7 +498,7 @@ class Dashboard {
     }
 
     /**
-     * Debug function to show spaceId-based mapping attempts, privacy information, and anchor data.
+     * Debug function to show format-agnostic audio mapping
      */
     debugMapping() {
         if (this.allSpaces.length === 0) {
@@ -460,19 +506,37 @@ class Dashboard {
             return;
         }
         
-        let debugInfo = 'SPACEID-BASED MP3 MAPPING, PRIVACY & ANCHOR DEBUG:\n\n';
-        const mp3Map = api.getMp3FilesMap();
-        debugInfo += `Available MP3 files (${Object.keys(mp3Map).length}):\n`;
-        Object.keys(mp3Map).forEach(key => {
-            debugInfo += `  ${key}\n`;
+        let debugInfo = 'FORMAT-AGNOSTIC AUDIO MAPPING, PRIVACY & ANCHOR DEBUG:\n\n';
+        const audioMap = api.getAudioFilesMap();
+        const supportedFormats = api.getSupportedFormats();
+        
+        debugInfo += `Supported audio formats: ${supportedFormats.join(', ')}\n`;
+        debugInfo += `Available audio files (${Object.keys(audioMap).length}):\n`;
+        
+        // Group by format for better overview
+        const formatGroups = {};
+        Object.keys(audioMap).forEach(key => {
+            const audioInfo = audioMap[key];
+            const format = audioInfo.format;
+            if (!formatGroups[format]) formatGroups[format] = [];
+            formatGroups[format].push(key);
         });
         
-        // Privacy statistics
+        Object.entries(formatGroups).forEach(([format, keys]) => {
+            debugInfo += `\n${format.toUpperCase()} files (${keys.length}):\n`;
+            keys.slice(0, 5).forEach(key => {
+                debugInfo += `  ${key}\n`;
+            });
+            if (keys.length > 5) {
+                debugInfo += `  ... and ${keys.length - 5} more\n`;
+            }
+        });
+        
+        // Privacy and anchor statistics (same as before)
         const privateSpaces = this.allSpaces.filter(s => s.private === true);
         const publicSpaces = this.allSpaces.filter(s => s.private === false);
         const unknownSpaces = this.allSpaces.filter(s => typeof s.private !== 'boolean');
         
-        // Anchor statistics
         const withAnchor = this.allSpaces.filter(s => s.anchor);
         const hostingAnchors = withAnchor.filter(s => s.anchor.role === 'hosting');
         const speakingAnchors = withAnchor.filter(s => s.anchor.role === 'speaking');
@@ -490,10 +554,9 @@ class Dashboard {
         debugInfo += `  Discovered via listening: ${listeningAnchors.length}\n`;
         debugInfo += `  No anchor info: ${this.allSpaces.length - withAnchor.length}\n`;
         
-        debugInfo += '\nSpaces and their spaceId-based mapping:\n';
+        debugInfo += '\nSpaces and their format-agnostic mapping:\n';
         this.allSpaces.forEach(space => {
-            // UPDATED: Use host as string instead of host.username
-            const mp3Url = api.getMp3UrlBySpaceId(space._id, space.host, space.createdAt);
+            const audioInfo = api.getAudioUrlBySpaceId(space._id, space.host, space.createdAt);
             const spaceUrl = this.getSpaceUrl(space);
             const privacyInfo = this.getPrivacyInfo(space);
             const anchorInfo = this.getAnchorInfo(space);
@@ -502,8 +565,15 @@ class Dashboard {
             debugInfo += `  Space ID: ${space._id}\n`;
             debugInfo += `  Privacy: ${privacyInfo.status} (${privacyInfo.tooltip})\n`;
             debugInfo += `  Anchor: ${anchorInfo.hasAnchor ? `${anchorInfo.displayText} (${anchorInfo.roleText})` : 'None'}\n`;
-            debugInfo += `  Expected S3 path: ${api.generateExpectedS3Path(space._id, space.host, space.createdAt)}\n`;
-            debugInfo += `  MP3 URL found: ${mp3Url ? 'YES' : 'NO'}\n`;
+            
+            // Show all possible paths for all formats
+            supportedFormats.forEach(format => {
+                const expectedPath = api.generateExpectedS3Path(space._id, space.host, space.createdAt, format);
+                debugInfo += `  Expected ${format} path: ${expectedPath}\n`;
+            });
+            
+            debugInfo += `  Audio found: ${audioInfo ? `YES (${audioInfo.format})` : 'NO'}\n`;
+            debugInfo += `  Audio URL: ${audioInfo ? audioInfo.url : 'Not available'}\n`;
             debugInfo += `  X.com URL: ${spaceUrl || 'Could not construct'}\n`;
         });
         
@@ -511,12 +581,11 @@ class Dashboard {
     }
 
     /**
-     * Refreshes all dashboard data with rate limiting
+     * Updated refresh method to use new audio loading
      */
     async refreshAll() {
         const now = Date.now();
         
-        // Rate limiting: prevent refreshes more frequently than minRefreshInterval
         if (now - this.lastRefreshTime < this.minRefreshInterval) {
             const remainingTime = Math.ceil((this.minRefreshInterval - (now - this.lastRefreshTime)) / 1000);
             Utils.showMessage(`Please wait ${remainingTime} seconds before refreshing again`, CONFIG.MESSAGE_TYPES.ERROR);
@@ -527,7 +596,7 @@ class Dashboard {
         Utils.showMessage('Refreshing all data...', CONFIG.MESSAGE_TYPES.SUCCESS);
         
         try {
-            await api.loadMp3Files();
+            await api.loadAudioFiles(); // Updated method name
             await this.loadHealth();
             await this.loadStats();
             await this.loadSpaces();

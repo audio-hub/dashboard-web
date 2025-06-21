@@ -1,13 +1,14 @@
 /**
- * API communication layer for the Twitter Spaces Dashboard with spaceId-based MP3 mapping
- * Updated to handle host as string and use new spaceId naming convention
+ * Format-agnostic API service for backward compatibility with both MP3 and AAC files
+ * Updated to handle any audio format (.mp3, .aac, .m4a, etc.)
  */
 
 class ApiService {
     constructor() {
         this.baseUrl = CONFIG.API_BASE_URL;
         this.s3BaseUrl = CONFIG.S3_BASE_URL;
-        this.mp3FilesMap = {};
+        this.audioFilesMap = {}; // Renamed from mp3FilesMap
+        this.supportedFormats = ['.mp3', '.aac', '.m4a', '.mp4']; // Add more as needed
     }
 
     /**
@@ -69,16 +70,45 @@ class ApiService {
     }
 
     /**
-     * Loads and processes MP3 files for spaceId-based mapping
+     * Detects the file format from filename
+     * @param {string} filename - The filename to check
+     * @returns {string|null} File extension or null if not supported
      */
-    async loadMp3Files() {
+    detectAudioFormat(filename) {
+        const lowerFilename = filename.toLowerCase();
+        return this.supportedFormats.find(format => lowerFilename.endsWith(format)) || null;
+    }
+
+    /**
+     * Extracts spaceId from filename, regardless of format
+     * @param {string} filename - The filename (e.g., "1yNGaLVymagKj.mp3" or "1yNGaLVymagKj-host-title.aac")
+     * @returns {string} Extracted spaceId
+     */
+    extractSpaceIdFromFilename(filename) {
+        // Remove any supported audio extension
+        let cleanFilename = filename;
+        for (const format of this.supportedFormats) {
+            if (cleanFilename.toLowerCase().endsWith(format)) {
+                cleanFilename = cleanFilename.slice(0, -format.length);
+                break;
+            }
+        }
+        
+        // Extract spaceId (first part before any dash)
+        return cleanFilename.split('-')[0];
+    }
+
+    /**
+     * Loads and processes audio files for spaceId-based mapping (format-agnostic)
+     */
+    async loadAudioFiles() {
         try {
-            console.log('🔄 Loading MP3 files for spaceId mapping...');
+            console.log('🔄 Loading audio files for spaceId mapping (all formats)...');
             const data = await this.getFiles();
-            this.mp3FilesMap = {};
+            this.audioFilesMap = {};
 
             if (data.files && Array.isArray(data.files)) {
-                console.log('📁 Processing MP3 files:', data.files.length, 'files found');
+                console.log('📁 Processing audio files:', data.files.length, 'files found');
                 
                 data.files.forEach(file => {
                     console.log('\n--- Processing file ---');
@@ -91,67 +121,79 @@ class ApiService {
                     if (parts.length >= 3) {
                         const hostUsername = parts[0];
                         const date = parts[1]; // e.g., "2025-05-28"
-                        const filename = parts[2]; // e.g., "1yNGaLVymagKj.mp3"
+                        const filename = parts[2]; // e.g., "1yNGaLVymagKj.mp3" or "1yNGaLVymagKj.aac"
                         
-                        // Skip files that don't end with .mp3
-                        if (!filename.toLowerCase().endsWith('.mp3')) {
-                            console.log('❌ Skipping non-MP3 file');
+                        // Check if it's a supported audio format
+                        const audioFormat = this.detectAudioFormat(filename);
+                        if (!audioFormat) {
+                            console.log('❌ Skipping non-audio file');
                             return;
                         }
                         
                         console.log('Host username:', hostUsername);
                         console.log('Date:', date);
                         console.log('Filename:', filename);
-                        console.log()
-                        // Extract spaceId from filename (remove .mp3 extension)
-                        const spaceId = filename.split('-')[0].replace(/\.mp3$/i, '');
+                        console.log('Audio format:', audioFormat);
+                        
+                        // Extract spaceId from filename (format-agnostic)
+                        const spaceId = this.extractSpaceIdFromFilename(filename);
                         console.log('Extracted spaceId:', spaceId);
                         
                         // Store using the spaceId as the key
-                        this.mp3FilesMap[spaceId] = this.s3BaseUrl + filePath;
-                        console.log(`Stored mapping: "${spaceId}" -> ${this.s3BaseUrl + filePath}`);
+                        this.audioFilesMap[spaceId] = {
+                            url: this.s3BaseUrl + filePath,
+                            format: audioFormat,
+                            originalPath: filePath
+                        };
+                        console.log(`Stored mapping: "${spaceId}" -> ${this.s3BaseUrl + filePath} (${audioFormat})`);
                         
                         // Also store with hostName+date+spaceId pattern for fallback
                         const compositeKey = `${hostUsername}/${date}/${spaceId}`;
-                        this.mp3FilesMap[compositeKey] = this.s3BaseUrl + filePath;
-                        console.log(`Stored composite mapping: "${compositeKey}" -> URL`);
+                        this.audioFilesMap[compositeKey] = {
+                            url: this.s3BaseUrl + filePath,
+                            format: audioFormat,
+                            originalPath: filePath
+                        };
+                        console.log(`Stored composite mapping: "${compositeKey}" -> URL (${audioFormat})`);
                         
                     } else {
                         console.log('❌ Skipping file - not enough path parts or wrong structure');
-                        console.log('Expected: hostName/date/spaceId.mp3');
+                        console.log('Expected: hostName/date/spaceId.[audio_format]');
                     }
                 });
                 
-                console.log('\n✅ Final MP3 mapping keys:');
-                Object.keys(this.mp3FilesMap).forEach(key => {
-                    console.log(`  "${key}"`);
+                console.log('\n✅ Final audio mapping keys:');
+                Object.keys(this.audioFilesMap).forEach(key => {
+                    const audioInfo = this.audioFilesMap[key];
+                    console.log(`  "${key}" -> ${audioInfo.format}`);
                 });
                 
-                Utils.showMessage(`Loaded ${Object.keys(this.mp3FilesMap).length} MP3 file mappings`, CONFIG.MESSAGE_TYPES.SUCCESS);
+                const totalFiles = Object.keys(this.audioFilesMap).length;
+                Utils.showMessage(`Loaded ${totalFiles} audio file mappings`, CONFIG.MESSAGE_TYPES.SUCCESS);
             }
         } catch (error) {
-            Utils.showMessage(`Failed to load MP3 file list: ${error.message}`);
-            console.error('MP3 files error:', error);
+            Utils.showMessage(`Failed to load audio file list: ${error.message}`);
+            console.error('Audio files error:', error);
             throw error;
         }
     }
 
     /**
-     * Gets MP3 URL for a space using spaceId-based mapping
+     * Gets audio URL for a space using spaceId-based mapping (format-agnostic)
      * @param {string} spaceId - The space ID
-     * @param {string} hostUsername - Host username (for fallback path construction) - now a string
+     * @param {string} hostUsername - Host username (for fallback path construction)
      * @param {string} createdAt - Creation date (for fallback path construction)
-     * @returns {string|null} MP3 URL if found
+     * @returns {Object|null} Audio info object with url and format, or null if not found
      */
-    getMp3UrlBySpaceId(spaceId, hostUsername = null, createdAt = null) {
-        console.log('\n🔍 Looking up MP3 for spaceId:', spaceId);
+    getAudioUrlBySpaceId(spaceId, hostUsername = null, createdAt = null) {
+        console.log('\n🔍 Looking up audio for spaceId:', spaceId);
         
         // Method 1: Direct spaceId lookup
         console.log('Method 1: Direct spaceId lookup');
-        let mp3Url = this.mp3FilesMap[spaceId];
-        if (mp3Url) {
-            console.log('✅ Found via direct spaceId lookup:', mp3Url);
-            return mp3Url;
+        let audioInfo = this.audioFilesMap[spaceId];
+        if (audioInfo) {
+            console.log('✅ Found via direct spaceId lookup:', audioInfo.url, `(${audioInfo.format})`);
+            return audioInfo;
         }
         console.log('❌ No direct match for spaceId');
         
@@ -159,7 +201,7 @@ class ApiService {
         if (hostUsername && createdAt) {
             console.log('Method 2: Composite key lookup');
             
-            // Clean up hostname - host is now a string
+            // Clean up hostname
             const cleanHost = hostUsername.replace(/[@=]/g, '').toLowerCase();
             
             // Extract date part from createdAt
@@ -168,63 +210,67 @@ class ApiService {
             const compositeKey = `${cleanHost}/${date}/${spaceId}`;
             console.log('Trying composite key:', compositeKey);
             
-            mp3Url = this.mp3FilesMap[compositeKey];
-            if (mp3Url) {
-                console.log('✅ Found via composite key:', mp3Url);
-                return mp3Url;
+            audioInfo = this.audioFilesMap[compositeKey];
+            if (audioInfo) {
+                console.log('✅ Found via composite key:', audioInfo.url, `(${audioInfo.format})`);
+                return audioInfo;
             }
             console.log('❌ No match for composite key');
         }
         
-        // Method 3: Fallback - construct expected URL and check if key exists
+        // Method 3: Fallback - try to construct expected URLs for all supported formats
         if (hostUsername && createdAt) {
-            console.log('Method 3: Construct expected S3 URL');
-            const expectedPath = this.generateExpectedS3Path(spaceId, hostUsername, createdAt);
-            const expectedUrl = this.s3BaseUrl + expectedPath;
+            console.log('Method 3: Try all supported formats');
             
-            console.log('Expected S3 path:', expectedPath);
-            console.log('Expected S3 URL:', expectedUrl);
-            
-            // Check if this path exists in our mapping (might be stored with different key)
-            const foundKey = Object.keys(this.mp3FilesMap).find(key => 
-                this.mp3FilesMap[key] === expectedUrl
-            );
-            
-            if (foundKey) {
-                console.log('✅ Found via expected URL construction:', expectedUrl);
-                return expectedUrl;
+            for (const format of this.supportedFormats) {
+                const expectedPath = this.generateExpectedS3Path(spaceId, hostUsername, createdAt, format);
+                const expectedUrl = this.s3BaseUrl + expectedPath;
+                
+                console.log(`Trying format ${format}: ${expectedPath}`);
+                
+                // Check if this path exists in our mapping
+                const foundKey = Object.keys(this.audioFilesMap).find(key => 
+                    this.audioFilesMap[key].url === expectedUrl
+                );
+                
+                if (foundKey) {
+                    console.log('✅ Found via expected URL construction:', expectedUrl, `(${format})`);
+                    return this.audioFilesMap[foundKey];
+                }
             }
-            console.log('❌ Expected URL not found in mapping');
+            console.log('❌ No expected URLs found for any format');
         }
         
-        console.log('❌ No MP3 found for space:', spaceId);
+        console.log('❌ No audio found for space:', spaceId);
         console.log('Available spaceId keys in map:');
-        Object.keys(this.mp3FilesMap)
+        Object.keys(this.audioFilesMap)
             .filter(key => !key.includes('/')) // Only show direct spaceId keys
             .slice(0, 5)
             .forEach(key => {
-                console.log(`  "${key}"`);
+                const audioInfo = this.audioFilesMap[key];
+                console.log(`  "${key}" (${audioInfo.format})`);
             });
         
         return null;
     }
 
     /**
-     * Generates expected S3 path for a space
+     * Generates expected S3 path for a space with specified format
      * @param {string} spaceId - Space ID
-     * @param {string} hostUsername - Host username (now a string)
+     * @param {string} hostUsername - Host username
      * @param {string} createdAt - Creation date
+     * @param {string} format - Audio format (e.g., '.mp3', '.aac')
      * @returns {string} Expected S3 path
      */
-    generateExpectedS3Path(spaceId, hostUsername, createdAt) {
+    generateExpectedS3Path(spaceId, hostUsername, createdAt, format = '.aac') {
         if (!spaceId) return '';
         
         // Default fallback if no host/date info
         if (!hostUsername || !createdAt) {
-            return `spaces/${spaceId}.mp3`;
+            return `spaces/${spaceId}${format}`;
         }
         
-        // Clean up hostname (same logic as s3-uploader.js) - host is now a string
+        // Clean up hostname (same logic as s3-uploader.js)
         const cleanHost = hostUsername
             .replace(/[@]/g, '')
             .replace(/[^a-zA-Z0-9\-_.\/]/g, '-')
@@ -235,11 +281,56 @@ class ApiService {
         // Extract date
         const date = new Date(createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
         
-        return `${cleanHost}/${date}/${spaceId}.mp3`;
+        return `${cleanHost}/${date}/${spaceId}${format}`;
     }
 
+    /**
+     * Legacy method for backward compatibility
+     * @deprecated Use getAudioUrlBySpaceId instead
+     */
+    getMp3UrlBySpaceId(spaceId, hostUsername = null, createdAt = null) {
+        console.warn('getMp3UrlBySpaceId is deprecated, use getAudioUrlBySpaceId instead');
+        const audioInfo = this.getAudioUrlBySpaceId(spaceId, hostUsername, createdAt);
+        return audioInfo ? audioInfo.url : null;
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     * @deprecated Use loadAudioFiles instead
+     */
+    async loadMp3Files() {
+        console.warn('loadMp3Files is deprecated, use loadAudioFiles instead');
+        return await this.loadAudioFiles();
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     * @deprecated Use getAudioFilesMap instead
+     */
     getMp3FilesMap() {
-        return this.mp3FilesMap;
+        console.warn('getMp3FilesMap is deprecated, use getAudioFilesMap instead');
+        // Convert new format back to old format for compatibility
+        const legacyMap = {};
+        Object.keys(this.audioFilesMap).forEach(key => {
+            legacyMap[key] = this.audioFilesMap[key].url;
+        });
+        return legacyMap;
+    }
+
+    /**
+     * Gets the audio files map with format information
+     * @returns {Object} Audio files map with format info
+     */
+    getAudioFilesMap() {
+        return this.audioFilesMap;
+    }
+
+    /**
+     * Gets supported audio formats
+     * @returns {Array<string>} Array of supported file extensions
+     */
+    getSupportedFormats() {
+        return [...this.supportedFormats];
     }
 }
 
