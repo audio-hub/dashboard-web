@@ -46,6 +46,7 @@ class ApiService {
         const params = [];
         
         if (filters.limit) params.push(`limit=${filters.limit}`);
+        if (filters.offset) params.push(`offset=${filters.offset}`); // Add offset support
         if (filters.status) params.push(`status=${filters.status}`);
         
         endpoint += params.join('&');

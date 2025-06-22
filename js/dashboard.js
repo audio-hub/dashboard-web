@@ -9,10 +9,16 @@ class Dashboard {
         this.statsSection = null;
         this.statsGrid = null;
         this.spacesContent = null;
-        this.statusFilter = null;
-        this.limitFilter = null;
+        // Removed statusFilter reference
         this.lastRefreshTime = 0;
         this.minRefreshInterval = 10000; // 10 seconds minimum between auto-refreshes
+        
+        // Infinite scroll state
+        this.currentOffset = 0;
+        this.isLoading = false;
+        this.hasMore = true;
+        this.pageSize = 20;
+        
         this.init();
     }
 
@@ -23,8 +29,28 @@ class Dashboard {
         this.statsSection = Utils.getElementById('stats-section');
         this.statsGrid = Utils.getElementById('statsGrid');
         this.spacesContent = Utils.getElementById('spacesContent');
-        this.statusFilter = Utils.getElementById('statusFilter');
-        this.limitFilter = Utils.getElementById('limitFilter');
+        // Removed statusFilter since it's no longer needed
+        
+        // Set up infinite scroll
+        this.setupInfiniteScroll();
+    }
+
+    /**
+     * Sets up infinite scroll functionality
+     */
+    setupInfiniteScroll() {
+        window.addEventListener('scroll', Utils.debounce(() => {
+            if (this.isLoading || !this.hasMore) return;
+            
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
+            
+            // Load more when user is 300px from bottom
+            if (scrollTop + windowHeight >= documentHeight - 300) {
+                this.loadMoreSpaces();
+            }
+        }, 100));
     }
 
     /**
@@ -109,23 +135,69 @@ class Dashboard {
     }
     /**
      * Loads Twitter Spaces data from the API based on filters and displays them.
+     * Updated for infinite scroll - always starts fresh
      */
     async loadSpaces() {
         if (!this.spacesContent) return;
+
+        // Reset pagination state
+        this.currentOffset = 0;
+        this.hasMore = true;
+        this.allSpaces = [];
 
         this.spacesContent.innerHTML = '<div class="loading">Loading spaces...</div>';
 
         try {
             const filters = this.getFilterValues();
+            filters.offset = 0;
+            filters.limit = this.pageSize;
+            
             const data = await api.getSpaces(filters);
-            this.allSpaces = data.data; // Store for debugging
+            
+            this.allSpaces = data.data;
+            this.currentOffset = this.pageSize;
+            this.hasMore = data.hasMore;
             
             // Sort spaces before displaying
             const sortedSpaces = this.sortSpaces(data.data);
-            this.displaySpaces(sortedSpaces);
+            this.displaySpaces(sortedSpaces, false); // false = replace content
         } catch (error) {
             this.spacesContent.innerHTML = `<div class="error">Failed to load spaces: ${error.message}</div>`;
             console.error('Spaces error:', error);
+        }
+    }
+
+    /**
+     * Loads more spaces for infinite scroll
+     */
+    async loadMoreSpaces() {
+        if (this.isLoading || !this.hasMore) return;
+        
+        this.isLoading = true;
+        
+        try {
+            const filters = this.getFilterValues();
+            filters.offset = this.currentOffset;
+            filters.limit = this.pageSize;
+            
+            const data = await api.getSpaces(filters);
+            
+            if (data.data && data.data.length > 0) {
+                this.allSpaces = [...this.allSpaces, ...data.data];
+                this.currentOffset += data.data.length;
+                this.hasMore = data.hasMore;
+                
+                // Sort new spaces and append
+                const sortedSpaces = this.sortSpaces(data.data);
+                this.displaySpaces(sortedSpaces, true); // true = append content
+            } else {
+                this.hasMore = false;
+            }
+        } catch (error) {
+            console.error('Error loading more spaces:', error);
+            Utils.showMessage(`Failed to load more spaces: ${error.message}`);
+        } finally {
+            this.isLoading = false;
         }
     }
 
@@ -177,8 +249,8 @@ class Dashboard {
      */
     getFilterValues() {
         return {
-            status: this.statusFilter?.value || '',
-            limit: this.limitFilter?.value || CONFIG.DEFAULT_LIMIT
+            // No status filter anymore - just return defaults
+            limit: this.pageSize
         };
     }
 
@@ -283,49 +355,22 @@ class Dashboard {
 
     /**
      * Enhanced space display with format-agnostic audio mapping
+     * Updated for infinite scroll support
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
+     * @param {boolean} append - Whether to append (true) or replace (false) content
      */
-displaySpaces(spaces) {
+displaySpaces(spaces, append = false) {
     if (!this.spacesContent) return;
 
     if (!spaces || spaces.length === 0) {
-        this.spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+        if (!append) {
+            this.spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+        }
         return;
     }
 
-    // Simple stats
-    const liveCount = spaces.filter(s => s.isLive).length;
-    const endedCount = spaces.length - liveCount;
-    const withAnchorCount = spaces.filter(s => s.anchor).length;
-    
-    // Count spaces with audio
-    let spacesWithAudio = 0;
-    let totalAudioFiles = 0;
-    let spacesWithMultipleAudio = 0;
-    
-    spaces.forEach(space => {
-        const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
-        if (audioFiles && audioFiles.length > 0) {
-            spacesWithAudio++;
-            totalAudioFiles += audioFiles.length;
-            if (audioFiles.length > 1) {
-                spacesWithMultipleAudio++;
-            }
-        }
-    });
-    
-    let sortingInfo = `<div class="sorting-info">Showing ${spaces.length} spaces`;
-    if (liveCount > 0) sortingInfo += ` (${liveCount} live)`;
-    if (withAnchorCount > 0) sortingInfo += ` • ${withAnchorCount} discovered via following`;
-    if (spacesWithAudio > 0) {
-        sortingInfo += ` • ${spacesWithAudio} with audio (${totalAudioFiles} files total)`;
-        if (spacesWithMultipleAudio > 0) {
-            sortingInfo += `, ${spacesWithMultipleAudio} with multiple files`;
-        }
-    }
-    sortingInfo += '</div>';
-
-    this.spacesContent.innerHTML = sortingInfo + spaces.map(space => {
+    // Build the spaces HTML
+    const spacesHTML = spaces.map(space => {
         const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
         const spaceUrl = this.getSpaceUrl(space);
         const privacyInfo = this.getPrivacyInfo(space);
@@ -333,6 +378,61 @@ displaySpaces(spaces) {
         
         return this.createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo);
     }).join('');
+
+    if (append) {
+        // Append mode: add new spaces to existing content
+        const existingContent = this.spacesContent.innerHTML;
+        // Remove any existing loading indicator first
+        const cleanContent = existingContent.replace(/<div class="loading"[^>]*>.*?<\/div>/g, '');
+        this.spacesContent.innerHTML = cleanContent + spacesHTML;
+        
+        // Add loading indicator if there are more spaces
+        if (this.hasMore) {
+            this.spacesContent.innerHTML += '<div class="loading" style="padding: 20px; text-align: center; color: #666;">Scroll down for more...</div>';
+        }
+    } else {
+        // Replace mode: show stats + new spaces
+        const allSpacesForStats = this.allSpaces; // Use all loaded spaces for stats
+        
+        // Simple stats
+        const liveCount = allSpacesForStats.filter(s => s.isLive).length;
+        const withAnchorCount = allSpacesForStats.filter(s => s.anchor).length;
+        
+        // Count spaces with audio
+        let spacesWithAudio = 0;
+        let totalAudioFiles = 0;
+        let spacesWithMultipleAudio = 0;
+        
+        allSpacesForStats.forEach(space => {
+            const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
+            if (audioFiles && audioFiles.length > 0) {
+                spacesWithAudio++;
+                totalAudioFiles += audioFiles.length;
+                if (audioFiles.length > 1) {
+                    spacesWithMultipleAudio++;
+                }
+            }
+        });
+        
+        let sortingInfo = `<div class="sorting-info">Showing ${spaces.length} spaces`;
+        if (this.hasMore) sortingInfo += ` (scroll for more)`;
+        if (liveCount > 0) sortingInfo += ` • ${liveCount} live`;
+        if (withAnchorCount > 0) sortingInfo += ` • ${withAnchorCount} discovered via following`;
+        if (spacesWithAudio > 0) {
+            sortingInfo += ` • ${spacesWithAudio} with audio (${totalAudioFiles} files total)`;
+            if (spacesWithMultipleAudio > 0) {
+                sortingInfo += `, ${spacesWithMultipleAudio} with multiple files`;
+            }
+        }
+        sortingInfo += '</div>';
+
+        this.spacesContent.innerHTML = sortingInfo + spacesHTML;
+        
+        // Add loading indicator if there are more spaces
+        if (this.hasMore) {
+            this.spacesContent.innerHTML += '<div class="loading" style="padding: 20px; text-align: center; color: #666;">Scroll down for more...</div>';
+        }
+    }
 }
 
     /**

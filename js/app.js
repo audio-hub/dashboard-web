@@ -71,29 +71,7 @@ class App {
      * Set up event listeners for the application with reduced auto-refresh
      */
     setupEventListeners() {
-        // Filter change listeners with debouncing
-        const statusFilter = Utils.getElementById('statusFilter');
-        const limitFilter = Utils.getElementById('limitFilter');
-
-        if (statusFilter) {
-            statusFilter.addEventListener('change', 
-                Utils.debounce(() => {
-                    if (window.dashboard) {
-                        dashboard.loadSpaces();
-                    }
-                }, 300)
-            );
-        }
-
-        if (limitFilter) {
-            limitFilter.addEventListener('change', 
-                Utils.debounce(() => {
-                    if (window.dashboard) {
-                        dashboard.loadSpaces();
-                    }
-                }, 300)
-            );
-        }
+        // No more filter change listeners - all controls removed
 
         // Handle online/offline status
         window.addEventListener('online', () => {
