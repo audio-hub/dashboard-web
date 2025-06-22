@@ -192,9 +192,10 @@ body {
 
 .space-meta {
     display: flex;
-    gap: 15px;
+    gap: 8px;
     flex-wrap: wrap;
     margin-bottom: 10px;
+    align-items: center; /* This ensures vertical alignment */
 }
 
 .space-badge {
@@ -203,6 +204,10 @@ body {
     font-size: 0.8rem;
     font-weight: 500;
     cursor: help; /* Shows help cursor on hover for tooltips */
+    display: inline-flex; /* Changed from default to inline-flex */
+    align-items: center; /* Ensures content is vertically centered */
+    height: 24px; /* Fixed height for consistent alignment */
+    line-height: 1; /* Prevents line-height from affecting alignment */
 }
 
 /* Status Badges */
@@ -257,11 +262,30 @@ body {
     cursor: pointer;
     margin-right: 8px;
     transition: all 0.2s;
+    display: inline-flex; /* Changed to inline-flex for better alignment */
+    align-items: center; /* Vertically center content */
+    height: 24px; /* Match badge height for consistency */
+    line-height: 1; /* Remove line-height interference */
+    text-decoration: none; /* Remove any default link styling */
+    vertical-align: top; /* Align with badges when inline */
 }
 
 .btn-small:hover {
     background: #1da1f2;
     color: white;
+}
+
+/* Special styling for the primary button in meta section */
+.space-meta .btn-small.btn-primary {
+    background: #1da1f2;
+    color: white;
+    border: 1px solid #1da1f2;
+    margin-left: 8px; /* Spacing from the status badge */
+}
+
+.space-meta .btn-small.btn-primary:hover {
+    background: #1a91da;
+    border-color: #1a91da;
 }
 
 /* Status Messages */

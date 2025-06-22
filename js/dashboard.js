@@ -366,6 +366,7 @@ displaySpaces(spaces) {
 
     /**
      * Creates HTML for a single space item with format-agnostic audio support
+     * UPDATED: Removed "View Details" and "View Participants" buttons, moved "Open on X" button after status badge
      * @param {Object} space - Space object
      * @param {Object|null} audioInfo - Audio info object with url and format
      * @param {string|null} spaceUrl - X.com URL for the space
@@ -442,8 +443,6 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
 
             <div class="space-actions">
                 ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
-                <button class="btn-small" onclick="dashboard.viewSpaceDetails('${space._id}')">View Details</button>
-                <button class="btn-small" onclick="dashboard.viewParticipants('${space._id}')">View Participants</button>
                 ${audioFiles && audioFiles.length === 1 ? audioSection : ''}
             </div>
             ${audioFiles && audioFiles.length > 1 ? audioSection : ''}
