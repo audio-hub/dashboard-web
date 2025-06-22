@@ -6,7 +6,7 @@
 class App {
     constructor() {
         this.isInitialized = false;
-        this.autoRefreshInterval = null;
+        // Removed auto-refresh properties
         this.init();
     }
 
@@ -44,7 +44,7 @@ class App {
             Utils.showMessage('Loading data...', CONFIG.MESSAGE_TYPES.SUCCESS);
             
             // Load audio files mapping first (now supports all formats)
-            await api.loadAudioFiles(); // Updated from loadMp3Files()
+            await api.loadAudioFiles();
             
             // Load initial data
             await Promise.all([
@@ -56,11 +56,7 @@ class App {
             this.setupEventListeners();
             this.isInitialized = true;
             
-            this.autoRefreshInterval = setInterval(() => {
-                if (document.visibilityState === 'visible' && window.dashboard) {
-                    dashboard.refreshAll();
-                }
-            }, 30000);
+            // Removed auto-refresh interval setup
         } catch (error) {
             console.error('Failed to start application:', error);
             Utils.showMessage(`Failed to load initial data: ${error.message}`);
@@ -68,41 +64,19 @@ class App {
     }
 
     /**
-     * Set up event listeners for the application with reduced auto-refresh
+     * Set up event listeners for the application
      */
     setupEventListeners() {
-        // No more filter change listeners - all controls removed
-
-        // Handle online/offline status
+        // Basic connectivity handling only
         window.addEventListener('online', () => {
             Utils.showMessage('Connection restored', CONFIG.MESSAGE_TYPES.SUCCESS);
-            // Only refresh if user manually requests or if auto-refresh is enabled
-            if (this.autoRefreshEnabled && window.dashboard) {
-                dashboard.refreshAll();
-            }
         });
 
         window.addEventListener('offline', () => {
             Utils.showMessage('Connection lost - some features may not work');
-            this.stopAutoRefresh();
         });
 
-        // Handle page visibility changes with longer delay and user control
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && this.isInitialized) {
-                // Clear any existing timeout
-                if (this.visibilityRefreshTimeout) {
-                    clearTimeout(this.visibilityRefreshTimeout);
-                }
-                
-                // Only auto-refresh if enabled and after a longer delay (30 seconds)
-                if (this.autoRefreshEnabled && window.dashboard) {
-                    this.visibilityRefreshTimeout = setTimeout(() => {
-                        dashboard.refreshAll();
-                    }, 30000); // 30 second delay
-                }
-            }
-        });
+        // Removed all auto-refresh and visibility change handling
 
         console.log('Event listeners set up successfully');
     }
@@ -121,7 +95,7 @@ class App {
     }
 
     /**
-     * Updated status method to include audio format information
+     * Get application status - simplified without auto-refresh info
      */
     getStatus() {
         const audioMap = window.api ? api.getAudioFilesMap() : {};
@@ -135,7 +109,6 @@ class App {
         
         return {
             isInitialized: this.isInitialized,
-            autoRefreshEnabled: this.autoRefreshEnabled,
             spacesCount: window.dashboard ? dashboard.allSpaces.length : 0,
             audioFilesCount: Object.keys(audioMap).length,
             formatBreakdown: formatCounts,

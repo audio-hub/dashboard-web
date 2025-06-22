@@ -9,9 +9,7 @@ class Dashboard {
         this.statsSection = null;
         this.statsGrid = null;
         this.spacesContent = null;
-        // Removed statusFilter reference
-        this.lastRefreshTime = 0;
-        this.minRefreshInterval = 10000; // 10 seconds minimum between auto-refreshes
+        // Removed auto-refresh related properties
         
         // Infinite scroll state
         this.currentOffset = 0;
@@ -670,22 +668,13 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
     }
 
     /**
-     * Updated refresh method to use new audio loading
+     * Refresh method - removed auto-refresh throttling, simplified
      */
     async refreshAll() {
-        const now = Date.now();
-        
-        if (now - this.lastRefreshTime < this.minRefreshInterval) {
-            const remainingTime = Math.ceil((this.minRefreshInterval - (now - this.lastRefreshTime)) / 1000);
-            Utils.showMessage(`Please wait ${remainingTime} seconds before refreshing again`, CONFIG.MESSAGE_TYPES.ERROR);
-            return;
-        }
-        
-        this.lastRefreshTime = now;
         Utils.showMessage('Refreshing all data...', CONFIG.MESSAGE_TYPES.SUCCESS);
         
         try {
-            await api.loadAudioFiles(); // Updated method name
+            await api.loadAudioFiles();
             await this.loadHealth();
             await this.loadStats();
             await this.loadSpaces();
