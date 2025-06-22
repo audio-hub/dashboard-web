@@ -484,17 +484,40 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
     
     if (audioFiles && audioFiles.length > 0) {
         if (audioFiles.length === 1) {
-            audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available</span>`;
-            audioSection = `<button class="btn-small" onclick="window.open('${audioFiles[0].url}', '_blank')">🎧 Listen</button>`;
+            const file = audioFiles[0];
+            const duration = file.size ? this.calculateAudioDuration(file.size) : null;
+            const durationText = duration ? ` • ${duration}` : '';
+            
+            audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available${durationText}</span>`;
+            audioSection = `<button class="btn-small" onclick="window.open('${file.url}', '_blank')">🎧 Listen${durationText}</button>`;
         } else {
-            audioBadge = `<span class="space-badge badge-participants">🎧 ${audioFiles.length} Audio Files</span>`;
+            // Calculate total duration for multiple files
+            let totalDuration = 0;
+            let hasAllSizes = true;
+            
+            audioFiles.forEach(file => {
+                if (file.size) {
+                    const durationSeconds = (file.size * 8) / (128 * 1000); // 128kbps AAC
+                    totalDuration += durationSeconds;
+                } else {
+                    hasAllSizes = false;
+                }
+            });
+            
+            const totalDurationText = hasAllSizes && totalDuration > 0 ? 
+                ` • ${this.formatDurationFromSeconds(totalDuration)}` : '';
+            
+            audioBadge = `<span class="space-badge badge-participants">🎧 ${audioFiles.length} Audio Files${totalDurationText}</span>`;
             
             // Create organized list for multiple files
             const audioList = audioFiles.map((file, index) => {
                 const fileName = file.filename || `Audio ${index + 1}`;
+                const duration = file.size ? this.calculateAudioDuration(file.size) : null;
+                const durationText = duration ? ` (${duration})` : '';
+                
                 return `
                     <li class="audio-item">
-                        <span class="audio-filename">${fileName}</span>
+                        <span class="audio-filename">${fileName}${durationText}</span>
                         <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
                     </li>
                 `;
@@ -550,11 +573,47 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
     `;
 }
     /**
-     * Formats time display based on space status
-     * @param {Object} space - Space object
-     * @param {string} relevantDate - The relevant date for this space
-     * @returns {string} Formatted time display
+     * Calculates estimated audio duration from file size
+     * @param {number} fileSizeBytes - File size in bytes
+     * @param {number} bitrateKbps - Bitrate in kbps (default 128 for AAC)
+     * @returns {string} Formatted duration string
      */
+    calculateAudioDuration(fileSizeBytes, bitrateKbps = 128) {
+        if (!fileSizeBytes || fileSizeBytes <= 0) return null;
+        
+        // Formula: Duration (seconds) = (File Size in bytes × 8) / (Bitrate in bits per second)
+        const durationSeconds = (fileSizeBytes * 8) / (bitrateKbps * 1000);
+        
+        return this.formatDurationFromSeconds(durationSeconds);
+    }
+
+    /**
+     * Formats duration from seconds to human readable format
+     * @param {number} durationSeconds - Duration in seconds
+     * @returns {string} Formatted duration string with ~ prefix
+     */
+    formatDurationFromSeconds(durationSeconds) {
+        const minutes = Math.floor(durationSeconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        
+        if (hours > 0) {
+            return `~${hours}h ${remainingMinutes}m`;
+        } else {
+            return `~${minutes}m`;
+        }
+    }
+
+    /**
+     * Gets file size from the API files data
+     * @param {string} filePath - The full file path
+     * @returns {number|null} File size in bytes or null if not found
+     */
+    getFileSizeByPath(filePath) {
+        // This would need to be populated from the files API
+        // For now, we'll need to modify the audio loading to include size
+        return null; // Placeholder - will be implemented when files API includes size
+    }
     formatTimeDisplay(space, relevantDate) {
         const date = new Date(relevantDate);
         const now = new Date();

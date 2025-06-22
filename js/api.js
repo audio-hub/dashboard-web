@@ -104,7 +104,9 @@ class ApiService {
                         const audioInfo = {
                             url: this.s3BaseUrl + filePath,
                             filename: filename,
-                            path: filePath
+                            path: filePath,
+                            size: file.size || null, // Include file size from API response
+                            lastModified: file.lastModified || null
                         };
                         
                         // Create array if it doesn't exist
