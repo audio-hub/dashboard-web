@@ -627,7 +627,7 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
                     ${privacyInfo.icon} ${privacyInfo.status}
                 </span>
                 ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
-                    ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayName}
+                    ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
                 </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
                     ❓ No anchor
                 </span>`}
