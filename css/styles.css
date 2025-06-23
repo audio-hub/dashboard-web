@@ -195,7 +195,7 @@ body {
     gap: 8px;
     flex-wrap: wrap;
     margin-bottom: 10px;
-    align-items: center; /* This ensures vertical alignment */
+    align-items: center;
 }
 
 .space-badge {
@@ -203,11 +203,11 @@ body {
     border-radius: 4px;
     font-size: 0.8rem;
     font-weight: 500;
-    cursor: help; /* Shows help cursor on hover for tooltips */
-    display: inline-flex; /* Changed from default to inline-flex */
-    align-items: center; /* Ensures content is vertically centered */
-    height: 24px; /* Fixed height for consistent alignment */
-    line-height: 1; /* Prevents line-height from affecting alignment */
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    line-height: 1;
 }
 
 /* Status Badges */
@@ -250,6 +250,10 @@ body {
 
 .space-actions {
     margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .btn-small {
@@ -260,18 +264,28 @@ body {
     color: #1da1f2;
     border-radius: 4px;
     cursor: pointer;
-    margin-right: 8px;
     transition: all 0.2s;
-    display: inline-flex; /* Changed to inline-flex for better alignment */
-    align-items: center; /* Vertically center content */
-    height: 24px; /* Match badge height for consistency */
-    line-height: 1; /* Remove line-height interference */
-    text-decoration: none; /* Remove any default link styling */
-    vertical-align: top; /* Align with badges when inline */
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    line-height: 1;
+    text-decoration: none;
+    vertical-align: top;
 }
 
 .btn-small:hover {
     background: #1da1f2;
+    color: white;
+}
+
+/* Download button styling */
+.btn-small:contains("📥"), .btn-small[onclick*="downloadAudioFile"] {
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.btn-small:contains("📥"):hover, .btn-small[onclick*="downloadAudioFile"]:hover {
+    background: #28a745;
     color: white;
 }
 
@@ -280,7 +294,7 @@ body {
     background: #1da1f2;
     color: white;
     border: 1px solid #1da1f2;
-    margin-left: 8px; /* Spacing from the status badge */
+    margin-left: 8px;
 }
 
 .space-meta .btn-small.btn-primary:hover {
@@ -369,11 +383,11 @@ body {
 
 /* Health Panel */
 .health-panel {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 30px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    box-shadow: none;
 }
 
 .health-header {
@@ -469,8 +483,7 @@ body {
     border-top: 1px solid #eee;
 }
 
-/* Audio File List Styles - Add this to your styles.css */
-
+/* Audio File List Styles */
 .audio-list-container {
     margin-top: 12px;
     background: #f8f9fa;
@@ -496,8 +509,9 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 0;
+    padding: 8px 0;
     border-bottom: 1px solid #e9ecef;
+    gap: 10px;
 }
 
 .audio-item:last-child {
@@ -513,15 +527,32 @@ body {
     word-break: break-all;
 }
 
+.audio-buttons {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
 .btn-audio {
     flex-shrink: 0;
     padding: 4px 8px !important;
     font-size: 0.8rem !important;
     margin: 0 !important;
+    white-space: nowrap;
 }
 
-/* Collapsible Section Styles - Add to styles.css */
+/* Download button specific styling for audio buttons */
+.btn-audio[onclick*="downloadAudioFile"] {
+    border-color: #28a745 !important;
+    color: #28a745 !important;
+}
 
+.btn-audio[onclick*="downloadAudioFile"]:hover {
+    background: #28a745 !important;
+    color: white !important;
+}
+
+/* Collapsible Section Styles */
 .collapsible-section {
     background: white;
     border-radius: 12px;
@@ -570,15 +601,6 @@ body {
     overflow: hidden;
 }
 
-/* Update existing health panel styles */
-.health-panel {
-    background: transparent;
-    border-radius: 0;
-    padding: 0;
-    margin-bottom: 0;
-    box-shadow: none;
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
     .space-meta {
@@ -603,10 +625,11 @@ body {
         font-size: 0.8rem;
         padding: 10px 15px;
     }
+    
     .audio-item {
         flex-direction: column;
         align-items: flex-start;
-        gap: 4px;
+        gap: 8px;
     }
     
     .audio-filename {
@@ -614,8 +637,19 @@ body {
         margin-bottom: 4px;
     }
     
-    .btn-audio {
+    .audio-buttons {
         align-self: flex-end;
+        width: 100%;
+        justify-content: flex-end;
     }
     
+    .space-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
+    
+    .space-actions .btn-small {
+        justify-content: center;
+    }
 }

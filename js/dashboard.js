@@ -1,6 +1,7 @@
 /**
  * Enhanced Dashboard management with spaceId-based MP3 mapping and anchor information
  * Updated to handle host as string, reduce auto-updates, and display anchor data
+ * ADDED: Download functionality alongside listen buttons
  */
 
 class Dashboard {
@@ -49,6 +50,76 @@ class Dashboard {
                 this.loadMoreSpaces();
             }
         }, 100));
+    }
+
+    /**
+     * Downloads an audio file with proper filename using fetch to force download
+     * @param {string} url - Audio file URL
+     * @param {string} filename - Suggested filename
+     * @param {Object} space - Space object for additional context
+     */
+    async downloadAudioFile(url, filename, space) {
+        try {
+            // Create a more descriptive filename
+            const hostSlug = Utils.slugify(space.host || 'unknown');
+            const titleSlug = Utils.slugify(space.title || 'untitled');
+            const dateStr = space.createdAt ? 
+                new Date(space.createdAt).toISOString().split('T')[0] : 
+                'unknown-date';
+            
+            // Extract file extension from original filename or URL
+            const extension = filename.match(/\.(mp3|aac|m4a|mp4)$/i)?.[1] || 'mp3';
+            
+            // Create descriptive filename: host_title_date_spaceId.extension
+            const downloadFilename = `${hostSlug}_${titleSlug}_${dateStr}_${space._id}.${extension}`;
+            
+            Utils.showMessage(`Starting download: ${downloadFilename}`, CONFIG.MESSAGE_TYPES.SUCCESS);
+            
+            // Fetch the file
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Get the blob
+            const blob = await response.blob();
+            
+            // Create download link with blob URL
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = downloadFilename;
+            link.style.display = 'none';
+            
+            // Add to DOM, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up blob URL
+            window.URL.revokeObjectURL(blobUrl);
+            
+            Utils.showMessage(`Download started: ${downloadFilename}`, CONFIG.MESSAGE_TYPES.SUCCESS);
+        } catch (error) {
+            console.error('Download failed:', error);
+            Utils.showMessage(`Download failed: ${error.message}`);
+            
+            // Fallback: try simple download attribute approach
+            try {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename || 'audio_file';
+                link.target = '_blank';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                Utils.showMessage('Fallback download attempt initiated', CONFIG.MESSAGE_TYPES.SUCCESS);
+            } catch (fallbackError) {
+                console.error('Fallback download also failed:', fallbackError);
+                Utils.showMessage('Download failed. You can right-click the Listen button and "Save link as..."');
+            }
+        }
     }
 
     /**
@@ -464,7 +535,7 @@ displaySpaces(spaces, append = false) {
 
     /**
      * Creates HTML for a single space item with format-agnostic audio support
-     * UPDATED: Removed "View Details" and "View Participants" buttons, moved "Open on X" button after status badge
+     * UPDATED: Added download buttons alongside listen buttons
      * @param {Object} space - Space object
      * @param {Object|null} audioInfo - Audio info object with url and format
      * @param {string|null} spaceUrl - X.com URL for the space
@@ -487,7 +558,10 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
             const durationText = duration ? ` • ${duration}` : '';
             
             audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available${durationText}</span>`;
-            audioSection = `<button class="btn-small" onclick="window.open('${file.url}', '_blank')">🎧 Listen${durationText}</button>`;
+            audioSection = `
+                <button class="btn-small" onclick="window.open('${file.url}', '_blank')">🎧 Listen${durationText}</button>
+                <button class="btn-small" onclick="dashboard.downloadAudioFile('${file.url}', '${file.filename}', ${JSON.stringify(space).replace(/"/g, '&quot;')})">📥 Download</button>
+            `;
         } else {
             // Calculate total duration for multiple files
             let totalDuration = 0;
@@ -516,7 +590,10 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
                 return `
                     <li class="audio-item">
                         <span class="audio-filename">${fileName}${durationText}</span>
-                        <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
+                        <div class="audio-buttons">
+                            <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
+                            <button class="btn-small btn-audio" onclick="dashboard.downloadAudioFile('${file.url}', '${file.filename}', ${JSON.stringify(space).replace(/"/g, '&quot;')})">📥 Download</button>
+                        </div>
                     </li>
                 `;
             }).join('');
@@ -550,7 +627,7 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
                     ${privacyInfo.icon} ${privacyInfo.status}
                 </span>
                 ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
-                    ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
+                    ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayName}
                 </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
                     ❓ No anchor
                 </span>`}
