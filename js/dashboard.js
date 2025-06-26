@@ -2,6 +2,7 @@
  * Enhanced Dashboard management with spaceId-based MP3 mapping and anchor information
  * Updated to handle host as string, reduce auto-updates, and display anchor data
  * ADDED: Download functionality alongside listen buttons
+ * UPDATED: Changed audio bitrate assumption from 128kbps to 96kbps
  */
 
 class Dashboard {
@@ -563,13 +564,13 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
                 <button class="btn-small" onclick="dashboard.downloadAudioFile('${file.url}', '${file.filename}', ${JSON.stringify(space).replace(/"/g, '&quot;')})">📥 Download</button>
             `;
         } else {
-            // Calculate total duration for multiple files
+            // Calculate total duration for multiple files - UPDATED to use 96kbps
             let totalDuration = 0;
             let hasAllSizes = true;
             
             audioFiles.forEach(file => {
                 if (file.size) {
-                    const durationSeconds = (file.size * 8) / (128 * 1000); // 128kbps AAC
+                    const durationSeconds = (file.size * 8) / (96 * 1000); // CHANGED: 96kbps AAC instead of 128kbps
                     totalDuration += durationSeconds;
                 } else {
                     hasAllSizes = false;
@@ -649,11 +650,12 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
 }
     /**
      * Calculates estimated audio duration from file size
+     * UPDATED: Changed from 128kbps to 96kbps
      * @param {number} fileSizeBytes - File size in bytes
-     * @param {number} bitrateKbps - Bitrate in kbps (default 128 for AAC)
+     * @param {number} bitrateKbps - Bitrate in kbps (default 96 for AAC, changed from 128)
      * @returns {string} Formatted duration string
      */
-    calculateAudioDuration(fileSizeBytes, bitrateKbps = 128) {
+    calculateAudioDuration(fileSizeBytes, bitrateKbps = 96) {
         if (!fileSizeBytes || fileSizeBytes <= 0) return null;
         
         // Formula: Duration (seconds) = (File Size in bytes × 8) / (Bitrate in bits per second)
