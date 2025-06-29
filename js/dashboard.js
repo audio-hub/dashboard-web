@@ -558,19 +558,22 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
             const duration = file.size ? this.calculateAudioDuration(file.size) : null;
             const durationText = duration ? ` • ${duration}` : '';
             
+            // Create static download filename
+            const staticDownloadFilename = this.createDownloadFilename(space, file.filename);
+            
             audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available${durationText}</span>`;
             audioSection = `
                 <button class="btn-small" onclick="window.open('${file.url}', '_blank')">🎧 Listen${durationText}</button>
-                <button class="btn-small" onclick="dashboard.downloadAudioFile('${file.url}', '${file.filename}', ${JSON.stringify(space).replace(/"/g, '&quot;')})">📥 Download</button>
+                <a href="${file.url}" download="${staticDownloadFilename}" class="btn-small">📥 Download</a>
             `;
         } else {
-            // Calculate total duration for multiple files - UPDATED to use 96kbps
+            // Calculate total duration for multiple files
             let totalDuration = 0;
             let hasAllSizes = true;
             
             audioFiles.forEach(file => {
                 if (file.size) {
-                    const durationSeconds = (file.size * 8) / (96 * 1000); // CHANGED: 96kbps AAC instead of 128kbps
+                    const durationSeconds = (file.size * 8) / (96 * 1000); // 96kbps AAC
                     totalDuration += durationSeconds;
                 } else {
                     hasAllSizes = false;
@@ -582,18 +585,21 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
             
             audioBadge = `<span class="space-badge badge-participants">🎧 ${audioFiles.length} Audio Files${totalDurationText}</span>`;
             
-            // Create organized list for multiple files
+            // Create organized list for multiple files with static download links
             const audioList = audioFiles.map((file, index) => {
                 const fileName = file.filename || `Audio ${index + 1}`;
                 const duration = file.size ? this.calculateAudioDuration(file.size) : null;
                 const durationText = duration ? ` (${duration})` : '';
+                
+                // Create static download filename for each file
+                const staticDownloadFilename = this.createDownloadFilename(space, file.filename, index);
                 
                 return `
                     <li class="audio-item">
                         <span class="audio-filename">${fileName}${durationText}</span>
                         <div class="audio-buttons">
                             <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
-                            <button class="btn-small btn-audio" onclick="dashboard.downloadAudioFile('${file.url}', '${file.filename}', ${JSON.stringify(space).replace(/"/g, '&quot;')})">📥 Download</button>
+                            <a href="${file.url}" download="${staticDownloadFilename}" class="btn-small btn-audio">📥 Download</a>
                         </div>
                     </li>
                 `;
@@ -648,6 +654,35 @@ createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
         </div>
     `;
 }
+
+/**
+ * Creates a descriptive filename for downloads
+ * @param {Object} space - Space object for context
+ * @param {string} originalFilename - Original filename from server
+ * @param {number} index - Index for multiple files (optional)
+ * @returns {string} Formatted download filename
+ */
+createDownloadFilename(space, originalFilename, index = null) {
+    const hostSlug = Utils.slugify(space.host || 'unknown');
+    const titleSlug = Utils.slugify(space.title || 'untitled');
+    const dateStr = space.createdAt ? 
+        new Date(space.createdAt).toISOString().split('T')[0] : 
+        'unknown-date';
+    
+    // Extract file extension from original filename or default to mp3
+    const extension = originalFilename?.match(/\.(mp3|aac|m4a|mp4)$/i)?.[1] || 'mp3';
+    
+    // Create descriptive filename
+    let filename = `${hostSlug}_${titleSlug}_${dateStr}_${space._id}`;
+    
+    // Add index for multiple files
+    if (index !== null && index > 0) {
+        filename += `_part${index + 1}`;
+    }
+    
+    return `${filename}.${extension}`;
+}
+
     /**
      * Calculates estimated audio duration from file size
      * UPDATED: Changed from 128kbps to 96kbps

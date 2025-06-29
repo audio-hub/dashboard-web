@@ -601,6 +601,25 @@ body {
     overflow: hidden;
 }
 
+.btn-small[download] {
+    text-decoration: none !important;
+}
+
+.btn-small[download]:hover {
+    text-decoration: none !important;
+}
+
+.btn-audio[download] {
+    border-color: #28a745 !important;
+    color: #28a745 !important;
+}
+
+.btn-audio[download]:hover {
+    background: #28a745 !important;
+    color: white !important;
+    text-decoration: none !important;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .space-meta {
