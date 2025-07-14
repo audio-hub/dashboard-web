@@ -1,8 +1,9 @@
 /**
- * Enhanced Dashboard management with spaceId-based MP3 mapping and anchor information
+ * Enhanced Dashboard management with spaceId-based MP3 mapping and transcription support
  * Updated to handle host as string, reduce auto-updates, and display anchor data
  * ADDED: Download functionality alongside listen buttons
  * UPDATED: Changed audio bitrate assumption from 128kbps to 96kbps
+ * NEW: Added transcription file mapping and display
  */
 
 class Dashboard {
@@ -143,10 +144,6 @@ class Dashboard {
      * Displays the fetched statistics in the dashboard.
      * @param {Object} stats - The statistics data.
      */
-/**
-     * Displays the fetched statistics in the dashboard.
-     * @param {Object} stats - The statistics data.
-     */
     displayStats(stats) {
         if (!this.statsGrid) return;
 
@@ -203,6 +200,7 @@ class Dashboard {
             </div>
         `;
     }
+
     /**
      * Loads Twitter Spaces data from the API based on filters and displays them.
      * Updated for infinite scroll - always starts fresh
@@ -424,86 +422,95 @@ class Dashboard {
     }
 
     /**
-     * Enhanced space display with format-agnostic audio mapping
+     * Enhanced space display with format-agnostic audio mapping and transcription support
      * Updated for infinite scroll support
      * @param {Array<Object>} spaces - An array of Twitter Space objects.
      * @param {boolean} append - Whether to append (true) or replace (false) content
      */
-displaySpaces(spaces, append = false) {
-    if (!this.spacesContent) return;
+    displaySpaces(spaces, append = false) {
+        if (!this.spacesContent) return;
 
-    if (!spaces || spaces.length === 0) {
-        if (!append) {
-            this.spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+        if (!spaces || spaces.length === 0) {
+            if (!append) {
+                this.spacesContent.innerHTML = '<div class="loading">No spaces found</div>';
+            }
+            return;
         }
-        return;
-    }
 
-    // Build the spaces HTML
-    const spacesHTML = spaces.map(space => {
-        const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
-        const spaceUrl = this.getSpaceUrl(space);
-        const privacyInfo = this.getPrivacyInfo(space);
-        const anchorInfo = this.getAnchorInfo(space);
-        
-        return this.createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo);
-    }).join('');
-
-    if (append) {
-        // Append mode: add new spaces to existing content
-        const existingContent = this.spacesContent.innerHTML;
-        // Remove any existing loading indicator first
-        const cleanContent = existingContent.replace(/<div class="loading"[^>]*>.*?<\/div>/g, '');
-        this.spacesContent.innerHTML = cleanContent + spacesHTML;
-        
-        // Add loading indicator if there are more spaces
-        if (this.hasMore) {
-            this.spacesContent.innerHTML += '<div class="loading" style="padding: 20px; text-align: center; color: #666;">Scroll down for more...</div>';
-        }
-    } else {
-        // Replace mode: show stats + new spaces
-        const allSpacesForStats = this.allSpaces; // Use all loaded spaces for stats
-        
-        // Simple stats
-        const liveCount = allSpacesForStats.filter(s => s.isLive).length;
-        const withAnchorCount = allSpacesForStats.filter(s => s.anchor).length;
-        
-        // Count spaces with audio
-        let spacesWithAudio = 0;
-        let totalAudioFiles = 0;
-        let spacesWithMultipleAudio = 0;
-        
-        allSpacesForStats.forEach(space => {
+        // Build the spaces HTML
+        const spacesHTML = spaces.map(space => {
             const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
-            if (audioFiles && audioFiles.length > 0) {
-                spacesWithAudio++;
-                totalAudioFiles += audioFiles.length;
-                if (audioFiles.length > 1) {
-                    spacesWithMultipleAudio++;
+            const transcription = api.getTranscriptionBySpaceId(space._id, space.host, space.createdAt);
+            const spaceUrl = this.getSpaceUrl(space);
+            const privacyInfo = this.getPrivacyInfo(space);
+            const anchorInfo = this.getAnchorInfo(space);
+            
+            return this.createSpaceItemHTML(space, audioFiles, transcription, spaceUrl, privacyInfo, anchorInfo);
+        }).join('');
+
+        if (append) {
+            // Append mode: add new spaces to existing content
+            const existingContent = this.spacesContent.innerHTML;
+            // Remove any existing loading indicator first
+            const cleanContent = existingContent.replace(/<div class="loading"[^>]*>.*?<\/div>/g, '');
+            this.spacesContent.innerHTML = cleanContent + spacesHTML;
+            
+            // Add loading indicator if there are more spaces
+            if (this.hasMore) {
+                this.spacesContent.innerHTML += '<div class="loading" style="padding: 20px; text-align: center; color: #666;">Scroll down for more...</div>';
+            }
+        } else {
+            // Replace mode: show stats + new spaces
+            const allSpacesForStats = this.allSpaces; // Use all loaded spaces for stats
+            
+            // Simple stats
+            const liveCount = allSpacesForStats.filter(s => s.isLive).length;
+            const withAnchorCount = allSpacesForStats.filter(s => s.anchor).length;
+            
+            // Count spaces with audio and transcription
+            let spacesWithAudio = 0;
+            let totalAudioFiles = 0;
+            let spacesWithMultipleAudio = 0;
+            let spacesWithTranscription = 0;
+            
+            allSpacesForStats.forEach(space => {
+                const audioFiles = api.getAllAudioFilesBySpaceId(space._id, space.host, space.createdAt);
+                const transcription = api.getTranscriptionBySpaceId(space._id, space.host, space.createdAt);
+                if (audioFiles && audioFiles.length > 0) {
+                    spacesWithAudio++;
+                    totalAudioFiles += audioFiles.length;
+                    if (audioFiles.length > 1) {
+                        spacesWithMultipleAudio++;
+                    }
+                }
+                if (transcription) {
+                    spacesWithTranscription++;
+                }
+            });
+            
+            let sortingInfo = `<div class="sorting-info">Showing ${spaces.length} spaces`;
+            if (this.hasMore) sortingInfo += ` (scroll for more)`;
+            if (liveCount > 0) sortingInfo += ` • ${liveCount} live`;
+            if (withAnchorCount > 0) sortingInfo += ` • ${withAnchorCount} discovered via following`;
+            if (spacesWithAudio > 0) {
+                sortingInfo += ` • ${spacesWithAudio} with audio (${totalAudioFiles} files total)`;
+                if (spacesWithMultipleAudio > 0) {
+                    sortingInfo += `, ${spacesWithMultipleAudio} with multiple files`;
                 }
             }
-        });
-        
-        let sortingInfo = `<div class="sorting-info">Showing ${spaces.length} spaces`;
-        if (this.hasMore) sortingInfo += ` (scroll for more)`;
-        if (liveCount > 0) sortingInfo += ` • ${liveCount} live`;
-        if (withAnchorCount > 0) sortingInfo += ` • ${withAnchorCount} discovered via following`;
-        if (spacesWithAudio > 0) {
-            sortingInfo += ` • ${spacesWithAudio} with audio (${totalAudioFiles} files total)`;
-            if (spacesWithMultipleAudio > 0) {
-                sortingInfo += `, ${spacesWithMultipleAudio} with multiple files`;
+            if (spacesWithTranscription > 0) {
+                sortingInfo += ` • ${spacesWithTranscription} with transcripts`;
+            }
+            sortingInfo += '</div>';
+
+            this.spacesContent.innerHTML = sortingInfo + spacesHTML;
+            
+            // Add loading indicator if there are more spaces
+            if (this.hasMore) {
+                this.spacesContent.innerHTML += '<div class="loading" style="padding: 20px; text-align: center; color: #666;">Scroll down for more...</div>';
             }
         }
-        sortingInfo += '</div>';
-
-        this.spacesContent.innerHTML = sortingInfo + spacesHTML;
-        
-        // Add loading indicator if there are more spaces
-        if (this.hasMore) {
-            this.spacesContent.innerHTML += '<div class="loading" style="padding: 20px; text-align: center; color: #666;">Scroll down for more...</div>';
-        }
     }
-}
 
     /**
      * Gets audio format statistics for the displayed spaces
@@ -535,153 +542,156 @@ displaySpaces(spaces, append = false) {
     }
 
     /**
-     * Creates HTML for a single space item with format-agnostic audio support
-     * UPDATED: Added download buttons alongside listen buttons
+     * Creates HTML for a single space item with format-agnostic audio support and transcription
+     * UPDATED: Added download buttons alongside listen buttons and transcription support
      * @param {Object} space - Space object
-     * @param {Object|null} audioInfo - Audio info object with url and format
+     * @param {Object|null} audioFiles - Audio files array
+     * @param {Object|null} transcription - Transcription file info
      * @param {string|null} spaceUrl - X.com URL for the space
      * @param {Object} privacyInfo - Privacy information object
      * @param {Object} anchorInfo - Anchor information object
      * @returns {string} HTML string
      */
-createSpaceItemHTML(space, audioFiles, spaceUrl, privacyInfo, anchorInfo) {
-    const relevantDate = this.getRelevantDate(space);
-    const timeDisplay = this.formatTimeDisplay(space, relevantDate);
-    
-    // Handle multiple audio sources
-    let audioBadge = '';
-    let audioSection = '';
-    
-    if (audioFiles && audioFiles.length > 0) {
-        if (audioFiles.length === 1) {
-            const file = audioFiles[0];
-            const duration = file.size ? this.calculateAudioDuration(file.size) : null;
-            const durationText = duration ? ` • ${duration}` : '';
-            
-            // Create static download filename
-            const staticDownloadFilename = this.createDownloadFilename(space, file.filename);
-            
-            audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available${durationText}</span>`;
-            audioSection = `
-                <button class="btn-small" onclick="window.open('${file.url}', '_blank')">🎧 Listen${durationText}</button>
-                <a href="${file.url}" download="${staticDownloadFilename}" class="btn-small">📥 Download</a>
-            `;
-        } else {
-            // Calculate total duration for multiple files
-            let totalDuration = 0;
-            let hasAllSizes = true;
-            
-            audioFiles.forEach(file => {
-                if (file.size) {
-                    const durationSeconds = (file.size * 8) / (96 * 1000); // 96kbps AAC
-                    totalDuration += durationSeconds;
-                } else {
-                    hasAllSizes = false;
-                }
-            });
-            
-            const totalDurationText = hasAllSizes && totalDuration > 0 ? 
-                ` • ${this.formatDurationFromSeconds(totalDuration)}` : '';
-            
-            audioBadge = `<span class="space-badge badge-participants">🎧 ${audioFiles.length} Audio Files${totalDurationText}</span>`;
-            
-            // Create organized list for multiple files with static download links
-            const audioList = audioFiles.map((file, index) => {
-                const fileName = file.filename || `Audio ${index + 1}`;
+    createSpaceItemHTML(space, audioFiles, transcription, spaceUrl, privacyInfo, anchorInfo) {
+        const relevantDate = this.getRelevantDate(space);
+        const timeDisplay = this.formatTimeDisplay(space, relevantDate);
+        
+        // Handle multiple audio sources
+        let audioBadge = '';
+        let audioSection = '';
+        
+        if (audioFiles && audioFiles.length > 0) {
+            if (audioFiles.length === 1) {
+                const file = audioFiles[0];
                 const duration = file.size ? this.calculateAudioDuration(file.size) : null;
-                const durationText = duration ? ` (${duration})` : '';
+                const durationText = duration ? ` • ${duration}` : '';
                 
-                // Create static download filename for each file
-                const staticDownloadFilename = this.createDownloadFilename(space, file.filename, index);
+                // Create static download filename
+                const staticDownloadFilename = this.createDownloadFilename(space, file.filename);
                 
-                return `
-                    <li class="audio-item">
-                        <span class="audio-filename">${fileName}${durationText}</span>
-                        <div class="audio-buttons">
-                            <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
-                            <a href="${file.url}" download="${staticDownloadFilename}" class="btn-small btn-audio">📥 Download</a>
-                        </div>
-                    </li>
+                audioBadge = `<span class="space-badge badge-participants">🎧 Audio Available${durationText}</span>`;
+                audioSection = `
+                    <button class="btn-small" onclick="window.open('${file.url}', '_blank')">🎧 Listen${durationText}</button>
+                    <a href="${file.url}" download="${staticDownloadFilename}" class="btn-small">📥 Download Audio</a>
                 `;
-            }).join('');
-            
-            audioSection = `
-                <div class="audio-list-container">
-                    <div class="audio-list-header">Audio Files:</div>
-                    <ul class="audio-list">
-                        ${audioList}
-                    </ul>
-                </div>
-            `;
+            } else {
+                // Calculate total duration for multiple files
+                let totalDuration = 0;
+                let hasAllSizes = true;
+                
+                audioFiles.forEach(file => {
+                    if (file.size) {
+                        const durationSeconds = (file.size * 8) / (96 * 1000); // 96kbps AAC
+                        totalDuration += durationSeconds;
+                    } else {
+                        hasAllSizes = false;
+                    }
+                });
+                
+                const totalDurationText = hasAllSizes && totalDuration > 0 ? 
+                    ` • ${this.formatDurationFromSeconds(totalDuration)}` : '';
+                
+                audioBadge = `<span class="space-badge badge-participants">🎧 ${audioFiles.length} Audio Files${totalDurationText}</span>`;
+                
+                // Create organized list for multiple files with static download links
+                const audioList = audioFiles.map((file, index) => {
+                    const fileName = file.filename || `Audio ${index + 1}`;
+                    const duration = file.size ? this.calculateAudioDuration(file.size) : null;
+                    const durationText = duration ? ` (${duration})` : '';
+                    
+                    // Create static download filename for each file
+                    const staticDownloadFilename = this.createDownloadFilename(space, file.filename, index);
+                    
+                    return `
+                        <li class="audio-item">
+                            <span class="audio-filename">${fileName}${durationText}</span>
+                            <div class="audio-buttons">
+                                <button class="btn-small btn-audio" onclick="window.open('${file.url}', '_blank')">🎧 Listen</button>
+                                <a href="${file.url}" download="${staticDownloadFilename}" class="btn-small btn-audio">📥 Download audio</a>
+                            </div>
+                        </li>
+                    `;
+                }).join('');
+                
+                audioSection = `
+                    <div class="audio-list-container">
+                        <div class="audio-list-header">Audio Files:</div>
+                        <ul class="audio-list">
+                            ${audioList}
+                        </ul>
+                    </div>
+                `;
+            }
         }
-    }
-    
-    return `
-        <div class="space-item">
-            <div class="space-title">${space.title || 'Untitled Space'}</div>
-            <div class="space-host">
-                🎙️ ${space.host} 
-                ${anchorInfo.hasAnchor ? `<span style="color: #666; font-size: 0.9em;">• Discovered via ${anchorInfo.roleIcon} ${anchorInfo.displayText} (${anchorInfo.roleText})</span>` : ''}
-            </div>
-            <div class="space-meta">
-                <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
-                    ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
-                </span>
-                <span class="space-badge badge-participants">
-                    👥 ${space.participantCount || 0} participants
-                </span>
-                <span class="space-badge ${privacyInfo.badge}" title="${privacyInfo.tooltip}">
-                    ${privacyInfo.icon} ${privacyInfo.status}
-                </span>
-                ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
-                    ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
-                </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
-                    ❓ No anchor
-                </span>`}
-                <span class="space-badge badge-time">
-                    ${timeDisplay}
-                </span>
-                ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
-                ${audioBadge}
-            </div>
-            ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
+        
+        return `
+            <div class="space-item">
+                <div class="space-title">${space.title || 'Untitled Space'}</div>
+                <div class="space-host">
+                    🎙️ ${space.host} 
+                    ${anchorInfo.hasAnchor ? `<span style="color: #666; font-size: 0.9em;">• Discovered via ${anchorInfo.roleIcon} ${anchorInfo.displayText} (${anchorInfo.roleText})</span>` : ''}
+                </div>
+                <div class="space-meta">
+                    <span class="space-badge ${space.isLive ? 'badge-live' : 'badge-ended'}">
+                        ${space.isLive ? '🔴 LIVE' : '⚫ ENDED'}
+                    </span>
+                    <span class="space-badge badge-participants">
+                        👥 ${space.participantCount || 0} participants
+                    </span>
+                    <span class="space-badge ${privacyInfo.badge}" title="${privacyInfo.tooltip}">
+                        ${privacyInfo.icon} ${privacyInfo.status}
+                    </span>
+                    ${anchorInfo.hasAnchor ? `<span class="space-badge ${anchorInfo.badge}" title="${anchorInfo.tooltip}">
+                        ${anchorInfo.icon} Via ${anchorInfo.roleIcon} ${anchorInfo.displayText}
+                    </span>` : `<span class="space-badge badge-unknown" title="Space not discovered through following someone">
+                        ❓ No anchor
+                    </span>`}
+                    <span class="space-badge badge-time">
+                        ${timeDisplay}
+                    </span>
+                    ${space.recordingStatus ? `<span class="space-badge badge-participants">📹 ${space.recordingStatus}</span>` : ''}
+                    ${transcription ? `<span class="space-badge badge-participants">📄 Transcript Available</span>` : ''}
+                    ${audioBadge}
+                </div>
+                ${privacyInfo.isPrivate === null ? `<div class="debug-info">Privacy status: Inferred from available data (space predates privacy tracking)</div>` : ''}
 
-            <div class="space-actions">
-                ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
-                ${audioFiles && audioFiles.length === 1 ? audioSection : ''}
+                <div class="space-actions">
+                    ${spaceUrl ? `<button class="btn-small btn-primary" onclick="window.open('${spaceUrl}', '_blank')">🔗 Open on X</button>` : ''}
+                    ${transcription ? `<button class="btn-small" onclick="window.open('${transcription.url}', '_blank')">📄 Download Transcript</button>` : ''}
+                    ${audioFiles && audioFiles.length === 1 ? audioSection : ''}
+                </div>
+                ${audioFiles && audioFiles.length > 1 ? audioSection : ''}
             </div>
-            ${audioFiles && audioFiles.length > 1 ? audioSection : ''}
-        </div>
-    `;
-}
-
-/**
- * Creates a descriptive filename for downloads
- * @param {Object} space - Space object for context
- * @param {string} originalFilename - Original filename from server
- * @param {number} index - Index for multiple files (optional)
- * @returns {string} Formatted download filename
- */
-createDownloadFilename(space, originalFilename, index = null) {
-    const hostSlug = Utils.slugify(space.host || 'unknown');
-    const titleSlug = Utils.slugify(space.title || 'untitled');
-    const dateStr = space.createdAt ? 
-        new Date(space.createdAt).toISOString().split('T')[0] : 
-        'unknown-date';
-    
-    // Extract file extension from original filename or default to mp3
-    const extension = originalFilename?.match(/\.(mp3|aac|m4a|mp4)$/i)?.[1] || 'mp3';
-    
-    // Create descriptive filename
-    let filename = `${hostSlug}_${titleSlug}_${dateStr}_${space._id}`;
-    
-    // Add index for multiple files
-    if (index !== null && index > 0) {
-        filename += `_part${index + 1}`;
+        `;
     }
-    
-    return `${filename}.${extension}`;
-}
+
+    /**
+     * Creates a descriptive filename for downloads
+     * @param {Object} space - Space object for context
+     * @param {string} originalFilename - Original filename from server
+     * @param {number} index - Index for multiple files (optional)
+     * @returns {string} Formatted download filename
+     */
+    createDownloadFilename(space, originalFilename, index = null) {
+        const hostSlug = Utils.slugify(space.host || 'unknown');
+        const titleSlug = Utils.slugify(space.title || 'untitled');
+        const dateStr = space.createdAt ? 
+            new Date(space.createdAt).toISOString().split('T')[0] : 
+            'unknown-date';
+        
+        // Extract file extension from original filename or default to mp3
+        const extension = originalFilename?.match(/\.(mp3|aac|m4a|mp4)$/i)?.[1] || 'mp3';
+        
+        // Create descriptive filename
+        let filename = `${hostSlug}_${titleSlug}_${dateStr}_${space._id}`;
+        
+        // Add index for multiple files
+        if (index !== null && index > 0) {
+            filename += `_part${index + 1}`;
+        }
+        
+        return `${filename}.${extension}`;
+    }
 
     /**
      * Calculates estimated audio duration from file size
@@ -726,6 +736,7 @@ createDownloadFilename(space, originalFilename, index = null) {
         // For now, we'll need to modify the audio loading to include size
         return null; // Placeholder - will be implemented when files API includes size
     }
+
     formatTimeDisplay(space, relevantDate) {
         const date = new Date(relevantDate);
         const now = new Date();

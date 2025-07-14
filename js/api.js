@@ -1,12 +1,13 @@
 /**
- * Simple multi-source audio mapper - just lists all audio files per space
+ * Simple multi-source audio mapper with transcription support
  */
 
 class ApiService {
     constructor() {
         this.baseUrl = CONFIG.API_BASE_URL;
         this.s3BaseUrl = CONFIG.S3_BASE_URL;
-        this.audioFilesMap = {}; // Now stores arrays of audio files per spaceId
+        this.audioFilesMap = {}; // Stores arrays of audio files per spaceId
+        this.transcriptionMap = {}; // Stores transcription files per spaceId
     }
 
     async makeRequest(endpoint) {
@@ -46,7 +47,7 @@ class ApiService {
         const params = [];
         
         if (filters.limit) params.push(`limit=${filters.limit}`);
-        if (filters.offset) params.push(`offset=${filters.offset}`); // Add offset support
+        if (filters.offset) params.push(`offset=${filters.offset}`);
         if (filters.status) params.push(`status=${filters.status}`);
         
         endpoint += params.join('&');
@@ -69,19 +70,20 @@ class ApiService {
      * Extracts spaceId from filename
      */
     extractSpaceIdFromFilename(filename) {
-        // Remove common audio extensions
-        let cleanFilename = filename.replace(/\.(mp3|aac|m4a|mp4)$/i, '');
+        // Remove common audio extensions and transcript extensions
+        let cleanFilename = filename.replace(/\.(mp3|aac|m4a|mp4|json|csv)$/i, '');
         return cleanFilename.split('-')[0];
     }
 
     /**
-     * Loads audio files and groups them by spaceId
+     * Loads audio files and transcription files, grouping them by spaceId
      */
     async loadAudioFiles() {
         try {
-            console.log('🔄 Loading audio files...');
+            console.log('🔄 Loading audio files and transcriptions...');
             const data = await this.getFiles();
             this.audioFilesMap = {};
+            this.transcriptionMap = {};
 
             if (data.files && Array.isArray(data.files)) {
                 console.log('📁 Processing files:', data.files.length);
@@ -95,59 +97,76 @@ class ApiService {
                         const date = parts[1];
                         const filename = parts[2];
                         
-                        // Skip non-audio files
-                        if (!/\.(mp3|aac|m4a|mp4)$/i.test(filename)) {
-                            return;
+                        // Process audio files
+                        if (/\.(mp3|aac|m4a|mp4)$/i.test(filename)) {
+                            const spaceId = this.extractSpaceIdFromFilename(filename);
+                            const audioInfo = {
+                                url: this.s3BaseUrl + filePath,
+                                filename: filename,
+                                path: filePath,
+                                size: file.size || null,
+                                lastModified: file.lastModified || null
+                            };
+                            
+                            if (!this.audioFilesMap[spaceId]) {
+                                this.audioFilesMap[spaceId] = [];
+                            }
+                            
+                            const exists = this.audioFilesMap[spaceId].some(existing => 
+                                existing.url === audioInfo.url
+                            );
+                            
+                            if (!exists) {
+                                this.audioFilesMap[spaceId].push(audioInfo);
+                            }
+                            
+                            // Also add with composite key for fallback
+                            const compositeKey = `${hostUsername}/${date}/${spaceId}`;
+                            if (!this.audioFilesMap[compositeKey]) {
+                                this.audioFilesMap[compositeKey] = [];
+                            }
+                            
+                            const compositeExists = this.audioFilesMap[compositeKey].some(existing => 
+                                existing.url === audioInfo.url
+                            );
+                            
+                            if (!compositeExists) {
+                                this.audioFilesMap[compositeKey].push(audioInfo);
+                            }
                         }
                         
-                        const spaceId = this.extractSpaceIdFromFilename(filename);
-                        const audioInfo = {
-                            url: this.s3BaseUrl + filePath,
-                            filename: filename,
-                            path: filePath,
-                            size: file.size || null, // Include file size from API response
-                            lastModified: file.lastModified || null
-                        };
-                        
-                        // Create array if it doesn't exist
-                        if (!this.audioFilesMap[spaceId]) {
-                            this.audioFilesMap[spaceId] = [];
-                        }
-                        
-                        // Add to array (no duplicates)
-                        const exists = this.audioFilesMap[spaceId].some(existing => 
-                            existing.url === audioInfo.url
-                        );
-                        
-                        if (!exists) {
-                            this.audioFilesMap[spaceId].push(audioInfo);
-                        }
-                        
-                        // Also add with composite key for fallback
-                        const compositeKey = `${hostUsername}/${date}/${spaceId}`;
-                        if (!this.audioFilesMap[compositeKey]) {
-                            this.audioFilesMap[compositeKey] = [];
-                        }
-                        
-                        const compositeExists = this.audioFilesMap[compositeKey].some(existing => 
-                            existing.url === audioInfo.url
-                        );
-                        
-                        if (!compositeExists) {
-                            this.audioFilesMap[compositeKey].push(audioInfo);
+                        // Process transcription files (JSON and CSV)
+                        else if (/\.(json|csv)$/i.test(filename)) {
+                            const spaceId = this.extractSpaceIdFromFilename(filename);
+                            const transcriptionInfo = {
+                                url: this.s3BaseUrl + filePath,
+                                filename: filename,
+                                path: filePath,
+                                size: file.size || null,
+                                lastModified: file.lastModified || null
+                            };
+                            
+                            // Store transcription (one per space)
+                            this.transcriptionMap[spaceId] = transcriptionInfo;
+                            
+                            // Also add with composite key for fallback
+                            const compositeKey = `${hostUsername}/${date}/${spaceId}`;
+                            this.transcriptionMap[compositeKey] = transcriptionInfo;
                         }
                     }
                 });
                 
                 const spacesWithAudio = Object.keys(this.audioFilesMap).filter(key => !key.includes('/')).length;
                 const totalAudioFiles = Object.values(this.audioFilesMap).reduce((sum, files) => sum + files.length, 0);
+                const spacesWithTranscription = Object.keys(this.transcriptionMap).filter(key => !key.includes('/')).length;
                 
                 console.log(`✅ Loaded ${totalAudioFiles} audio files for ${spacesWithAudio} spaces`);
-                Utils.showMessage(`Loaded ${totalAudioFiles} audio files for ${spacesWithAudio} spaces`, CONFIG.MESSAGE_TYPES.SUCCESS);
+                console.log(`✅ Loaded ${spacesWithTranscription} transcription files (JSON/CSV)`);
+                Utils.showMessage(`Loaded ${totalAudioFiles} audio files and ${spacesWithTranscription} transcriptions`, CONFIG.MESSAGE_TYPES.SUCCESS);
             }
         } catch (error) {
-            Utils.showMessage(`Failed to load audio files: ${error.message}`);
-            console.error('Audio files error:', error);
+            Utils.showMessage(`Failed to load files: ${error.message}`);
+            console.error('Files loading error:', error);
             throw error;
         }
     }
@@ -178,6 +197,31 @@ class ApiService {
     }
 
     /**
+     * Gets transcription file for a space
+     */
+    getTranscriptionBySpaceId(spaceId, hostUsername = null, createdAt = null) {
+        // Try direct lookup first
+        let transcription = this.transcriptionMap[spaceId];
+        if (transcription) {
+            return transcription;
+        }
+        
+        // Try composite key fallback
+        if (hostUsername && createdAt) {
+            const cleanHost = hostUsername.replace(/[@=]/g, '').toLowerCase();
+            const date = new Date(createdAt).toISOString().split('T')[0];
+            const compositeKey = `${cleanHost}/${date}/${spaceId}`;
+            
+            transcription = this.transcriptionMap[compositeKey];
+            if (transcription) {
+                return transcription;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * Gets first audio file for backward compatibility
      */
     getAudioUrlBySpaceId(spaceId, hostUsername = null, createdAt = null) {
@@ -187,6 +231,10 @@ class ApiService {
 
     getAudioFilesMap() {
         return this.audioFilesMap;
+    }
+
+    getTranscriptionMap() {
+        return this.transcriptionMap;
     }
 }
 
